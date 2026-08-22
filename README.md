@@ -1,7 +1,7 @@
 # Gesture Controls
 
 Gesture Controls is a Windows-first, local webcam hand-landmark prototype. The
-current code includes **Iterations 1 through 3**: it displays a mirrored camera
+current code includes **Iterations 1 through 4**: it displays a mirrored camera
 preview, one detected hand, a smoothed dry-run cursor target, and a temporally
 validated thumb–index pinch state. It cannot move or click the operating-system
 pointer, scroll, drag, or generate keyboard events.
@@ -77,6 +77,12 @@ cursor freezes at candidate entry and resumes immediately after release through
 reseeded smoothing. Provisional defaults for both gestures are activation `0.30`,
 release `0.42`, activation/release holds `0.03 s`, and debounce `0.06 s`. These
 values are configuration defaults, not final calibrated thresholds.
+
+Iteration 4 maps thumb–little pinch to one dry-run right click. Current click
+priority is thumb–little right click, thumb–middle double click, then thumb–index
+left click. Right click is first so crossing near the middle finger while reaching
+the little finger cannot become a double click. It uses provisional activation `0.30`, release `0.42`,
+activation/release holds `0.03 s`, and debounce `0.06 s`. Holding cannot repeat.
 
 ## Test
 

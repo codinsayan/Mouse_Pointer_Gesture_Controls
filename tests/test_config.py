@@ -50,6 +50,9 @@ def test_rejects_invalid_left_pinch_hysteresis() -> None:
         "double_click_activation_hold_seconds",
         "double_click_release_hold_seconds",
         "double_click_cooldown_seconds",
+        "right_click_activation_hold_seconds",
+        "right_click_release_hold_seconds",
+        "right_click_cooldown_seconds",
         "post_click_cursor_resume_delay_seconds",
     ],
 )
@@ -64,3 +67,8 @@ def test_rejects_invalid_double_click_pinch_hysteresis() -> None:
             double_click_pinch_activation_ratio=0.5,
             double_click_pinch_release_ratio=0.4,
         )
+
+
+def test_rejects_invalid_right_pinch_hysteresis() -> None:
+    with pytest.raises(ValueError, match="right-pinch ratios"):
+        AppConfig(right_pinch_activation_ratio=0.5, right_pinch_release_ratio=0.4)

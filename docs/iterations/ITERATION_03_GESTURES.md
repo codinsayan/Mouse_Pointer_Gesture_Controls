@@ -247,5 +247,5 @@ All behavior remains dry-run.
 
 ## Next Iteration
 
-Iteration 4 (thumb–ring-finger right-click recognition) requires explicit user
+Iteration 4 (thumb–little-finger right-click recognition) requires explicit user
 approval and will not begin automatically.

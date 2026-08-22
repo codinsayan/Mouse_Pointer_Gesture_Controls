@@ -32,8 +32,13 @@ class AppConfig:
     double_click_activation_hold_seconds: float = 0.03
     double_click_release_hold_seconds: float = 0.03
     double_click_cooldown_seconds: float = 0.06
+    right_pinch_activation_ratio: float = 0.30
+    right_pinch_release_ratio: float = 0.42
+    right_click_activation_hold_seconds: float = 0.03
+    right_click_release_hold_seconds: float = 0.03
+    right_click_cooldown_seconds: float = 0.06
     post_click_cursor_resume_delay_seconds: float = 0.0
-    window_title: str = "Gesture Controls - Iteration 3 (Dry Run)"
+    window_title: str = "Gesture Controls - Iteration 4 (Dry Run)"
 
     def __post_init__(self) -> None:
         if self.camera_index < 0:
@@ -69,6 +74,8 @@ class AppConfig:
             raise ValueError(
                 "double-click pinch ratios must satisfy 0 < activation < release"
             )
+        if not 0.0 < self.right_pinch_activation_ratio < self.right_pinch_release_ratio:
+            raise ValueError("right-pinch ratios must satisfy 0 < activation < release")
         for name in (
             "left_pinch_activation_hold_seconds",
             "left_pinch_release_hold_seconds",
@@ -76,6 +83,9 @@ class AppConfig:
             "double_click_activation_hold_seconds",
             "double_click_release_hold_seconds",
             "double_click_cooldown_seconds",
+            "right_click_activation_hold_seconds",
+            "right_click_release_hold_seconds",
+            "right_click_cooldown_seconds",
             "post_click_cursor_resume_delay_seconds",
         ):
             if getattr(self, name) < 0.0:

@@ -33,6 +33,7 @@ def draw_overlay(
     click_update: ClickGestureUpdate | None = None,
     dry_run_left_clicks: int = 0,
     dry_run_double_clicks: int = 0,
+    dry_run_right_clicks: int = 0,
     last_click_kind: str = "none",
 ) -> Any:
     import cv2
@@ -65,8 +66,15 @@ def draw_overlay(
             and click_update.double.state is PinchState.ACTIVE
             else (180, 180, 180)
         )
+        right_color = (
+            (80, 255, 255)
+            if click_update is not None
+            and click_update.right.state is PinchState.ACTIVE
+            else (180, 180, 180)
+        )
         cv2.line(frame, pixels[4], pixels[8], left_color, 3, cv2.LINE_AA)
         cv2.line(frame, pixels[4], pixels[12], double_color, 3, cv2.LINE_AA)
+        cv2.line(frame, pixels[4], pixels[20], right_color, 3, cv2.LINE_AA)
 
     hand = "Detected" if result.hand_detected else "Not detected"
     handedness = result.handedness or "N/A"
@@ -94,8 +102,13 @@ def draw_overlay(
             "N/A" if click_update is None
             else f"{click_update.double.state.value} ({click_update.double.ratio:.3f})"
         ),
+        "Right pinch: " + (
+            "N/A" if click_update is None
+            else f"{click_update.right.state.value} ({click_update.right.ratio:.3f})"
+        ),
         f"Dry-run left clicks: {dry_run_left_clicks}",
         f"Dry-run double clicks: {dry_run_double_clicks}",
+        f"Dry-run right clicks: {dry_run_right_clicks}",
         f"Last click: {last_click_kind}",
         "Press Q or Esc to quit",
     )

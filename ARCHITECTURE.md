@@ -48,6 +48,14 @@ suppressed and reset. Either candidate freezes cursor output before finger
 articulation can move the target. On release, smoothing is immediately reseeded
 from the frozen output, preventing a catch-up jump without adding resume delay.
 
+Iteration 4 adds thumb–little normalized distance and a third generic pinch
+recognizer. The coordinator resolves candidate, active, activation, and release
+frames in strict priority: thumb–little right click, thumb–middle double click,
+then thumb–index left click. Right click leads because the thumb may pass near
+the middle fingertip while travelling toward the little fingertip. A claimed
+higher-priority frame resets lower recognizers, guaranteeing one dry-run action
+and preventing action overlap.
+
 ## Planned Boundaries
 
 - `camera`: webcam acquisition and camera failures.
@@ -61,7 +69,7 @@ from the frozen output, preventing a catch-up jump without adding resume delay.
 
 The later mouse controller will be behind an interface, default to disabled/dry
 run, and guarantee release on loss, exceptions, and shutdown. It does not exist
-through Iteration 3; cursor and click results are visualized in the preview only.
+through Iteration 4; cursor and click results are visualized in the preview only.
 
 ## Data Flow and Privacy
 

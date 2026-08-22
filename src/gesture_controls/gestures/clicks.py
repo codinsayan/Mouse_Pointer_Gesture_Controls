@@ -1,4 +1,4 @@
-"""Resolve left and double-click pinch recognition by explicit priority."""
+"""Resolve mutually exclusive click pinches by explicit priority."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ class ClickAction(str, Enum):
     NONE = "none"
     LEFT_CLICK = "left_click"
     DOUBLE_CLICK = "double_click"
+    RIGHT_CLICK = "right_click"
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,25 +21,46 @@ class ClickGestureUpdate:
     selected: PinchUpdate
     left: PinchUpdate
     double: PinchUpdate
+    right: PinchUpdate
 
 
 class ClickGestureCoordinator:
-    """Give thumb–middle double click priority over thumb–index left click."""
+    """Resolve click priority as thumb–little, thumb–middle, then thumb–index."""
 
     def __init__(
         self,
         left: PinchRecognizer,
         double: PinchRecognizer,
+        right: PinchRecognizer,
     ) -> None:
         self._left = left
         self._double = double
+        self._right = right
 
     def update(
         self,
         left_ratio: float,
         double_ratio: float,
+        right_ratio: float,
         timestamp_seconds: float,
     ) -> ClickGestureUpdate:
+        right = self._right.update(right_ratio, timestamp_seconds)
+        right_claims_frame = (
+            right.cursor_should_freeze
+            or right.transition is GestureTransition.RELEASED
+        )
+        if right_claims_frame:
+            self._double.reset(timestamp_seconds)
+            self._left.reset(timestamp_seconds)
+            left = PinchUpdate(left_ratio, self._left.state)
+            double = PinchUpdate(double_ratio, self._double.state)
+            action = (
+                ClickAction.RIGHT_CLICK
+                if right.transition is GestureTransition.ACTIVATED
+                else ClickAction.NONE
+            )
+            return ClickGestureUpdate(action, right, left, double, right)
+
         double = self._double.update(double_ratio, timestamp_seconds)
         double_claims_frame = (
             double.cursor_should_freeze
@@ -52,7 +74,7 @@ class ClickGestureCoordinator:
                 if double.transition is GestureTransition.ACTIVATED
                 else ClickAction.NONE
             )
-            return ClickGestureUpdate(action, double, left, double)
+            return ClickGestureUpdate(action, double, left, double, right)
 
         left = self._left.update(left_ratio, timestamp_seconds)
         action = (
@@ -60,8 +82,9 @@ class ClickGestureCoordinator:
             if left.transition is GestureTransition.ACTIVATED
             else ClickAction.NONE
         )
-        return ClickGestureUpdate(action, left, left, double)
+        return ClickGestureUpdate(action, left, left, double, right)
 
     def reset(self, timestamp_seconds: float | None = None) -> None:
         self._left.reset(timestamp_seconds)
         self._double.reset(timestamp_seconds)
+        self._right.reset(timestamp_seconds)

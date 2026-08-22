@@ -49,10 +49,18 @@ def run(config: AppConfig) -> None:
             config.double_click_release_hold_seconds,
             config.double_click_cooldown_seconds,
         ),
+        PinchRecognizer(
+            config.right_pinch_activation_ratio,
+            config.right_pinch_release_ratio,
+            config.right_click_activation_hold_seconds,
+            config.right_click_release_hold_seconds,
+            config.right_click_cooldown_seconds,
+        ),
     )
     cursor_guard = ClickCursorGuard(config.post_click_cursor_resume_delay_seconds)
     dry_run_left_clicks = 0
     dry_run_double_clicks = 0
+    dry_run_right_clicks = 0
     last_click_kind = "none"
     last_timestamp_ms = -1
     try:
@@ -73,6 +81,7 @@ def run(config: AppConfig) -> None:
                     click_update = click_gestures.update(
                         pinch_features.left_pinch_ratio,
                         pinch_features.double_click_pinch_ratio,
+                        pinch_features.right_pinch_ratio,
                         now_seconds,
                     )
                     if click_update.action is ClickAction.LEFT_CLICK:
@@ -81,6 +90,9 @@ def run(config: AppConfig) -> None:
                     elif click_update.action is ClickAction.DOUBLE_CLICK:
                         dry_run_double_clicks += 1
                         last_click_kind = "double (thumb-middle)"
+                    elif click_update.action is ClickAction.RIGHT_CLICK:
+                        dry_run_right_clicks += 1
+                        last_click_kind = "right (thumb-little)"
                     guard = cursor_guard.update(click_update.selected, now_seconds)
                     if guard.resume_smoothing:
                         cursor_pipeline.resume_from_frozen_output(now_seconds)
@@ -105,6 +117,7 @@ def run(config: AppConfig) -> None:
                         click_update,
                         dry_run_left_clicks,
                         dry_run_double_clicks,
+                        dry_run_right_clicks,
                         last_click_kind,
                     ),
                 )

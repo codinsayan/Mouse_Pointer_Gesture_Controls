@@ -8,6 +8,7 @@ def make_hand(
     scale: float = 1.0,
     pinch_ratio: float = 0.2,
     double_ratio: float = 0.6,
+    right_ratio: float = 0.7,
 ) -> tuple[Landmark, ...]:
     points = [Landmark(2.0, 3.0, 0.0) for _ in range(21)]
     points[0] = Landmark(2.0, 3.0, 0.0)
@@ -17,6 +18,7 @@ def make_hand(
     points[4] = Landmark(2.0, 3.0, 0.0)
     points[8] = Landmark(2.0 + scale * pinch_ratio, 3.0, 0.0)
     points[12] = Landmark(2.0 + scale * double_ratio, 3.0, 0.0)
+    points[20] = Landmark(2.0 + scale * right_ratio, 3.0, 0.0)
     return tuple(points)
 
 
@@ -36,6 +38,20 @@ def test_double_click_ratio_uses_thumb_to_middle_tip() -> None:
         make_hand(scale=2.0, pinch_ratio=0.7, double_ratio=0.2)
     )
     assert features.double_click_pinch_ratio == pytest.approx(0.2)
+
+
+def test_right_click_ratio_is_scale_independent() -> None:
+    small = extract_left_pinch_features(make_hand(scale=0.5, right_ratio=0.22))
+    large = extract_left_pinch_features(make_hand(scale=3.0, right_ratio=0.22))
+    assert small.right_pinch_ratio == pytest.approx(0.22)
+    assert large.right_pinch_ratio == pytest.approx(0.22)
+
+
+def test_right_click_ratio_uses_thumb_to_little_tip_not_ring_tip() -> None:
+    points = list(make_hand(scale=1.0, right_ratio=0.2))
+    points[16] = Landmark(2.01, 3.0, 0.0)
+    features = extract_left_pinch_features(tuple(points))
+    assert features.right_pinch_ratio == pytest.approx(0.2)
 
 
 def test_feature_extraction_requires_complete_landmarks() -> None:

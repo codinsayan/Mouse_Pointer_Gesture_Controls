@@ -14,6 +14,7 @@ INDEX_FINGER_TIP = 8
 MIDDLE_FINGER_MCP = 9
 MIDDLE_FINGER_TIP = 12
 LITTLE_FINGER_MCP = 17
+LITTLE_FINGER_TIP = 20
 REQUIRED_LANDMARK_COUNT = 21
 
 
@@ -21,6 +22,7 @@ REQUIRED_LANDMARK_COUNT = 21
 class PinchFeatures:
     left_pinch_ratio: float
     double_click_pinch_ratio: float
+    right_pinch_ratio: float
     hand_size: float
 
 
@@ -50,8 +52,12 @@ def extract_left_pinch_features(landmarks: Sequence[Landmark]) -> PinchFeatures:
     double_click_distance = normalized_distance(
         landmarks[THUMB_TIP], landmarks[MIDDLE_FINGER_TIP]
     )
+    right_click_distance = normalized_distance(
+        landmarks[THUMB_TIP], landmarks[LITTLE_FINGER_TIP]
+    )
     return PinchFeatures(
         pinch_distance / hand_size,
         double_click_distance / hand_size,
+        right_click_distance / hand_size,
         hand_size,
     )
