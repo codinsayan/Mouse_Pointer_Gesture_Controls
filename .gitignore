@@ -1,0 +1,15 @@
+.venv/
+.tmp/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+pytest-cache-files-*/
+.coverage
+htmlcov/
+build/
+dist/
+*.spec
+.idea/
+.vscode/
+assets/models/*.task

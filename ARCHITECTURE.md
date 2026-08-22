@@ -1,0 +1,68 @@
+# Architecture
+
+## Principles
+
+The project uses a `src` package layout. Hardware/framework adapters are kept at
+the edges, while deterministic calculations and state transitions remain easy to
+unit-test. Frames have in-memory, iteration-local lifetimes and are never saved or
+transmitted.
+
+## Current Components
+
+```text
+main / application loop
+  -> config (validated runtime settings)
+  -> camera.capture (OpenCV ownership and reads)
+  -> tracking.hand_landmarker (MediaPipe Tasks VIDEO inference)
+  -> tracking.landmarks (framework-neutral landmark data/utilities)
+  -> controls.cursor (normalized mapping, smoothing, movement threshold)
+  -> ui.overlay (drawing and status presentation)
+  -> diagnostics.fps (monotonic processed-FPS measurement)
+```
+
+`VIDEO` mode deliberately processes at most one frame at a time. Monotonically
+increasing timestamps allow MediaPipe's internal tracking. This simple bounded
+pipeline is appropriate for the prototype; a measured later iteration may adopt
+`LIVE_STREAM` and latest-result synchronization if needed.
+
+Iteration 2 feeds index fingertip landmark 8 into a deterministic dry-run cursor
+pipeline. A configured subregion of mirrored camera coordinates maps to the full
+normalized screen range. An elapsed-time exponential filter smooths the target,
+and a normalized movement threshold suppresses tiny output changes. The pipeline
+resets on tracking loss and cannot emit mouse events.
+
+## Planned Boundaries
+
+- `camera`: webcam acquisition and camera failures.
+- `tracking`: MediaPipe inference plus framework-neutral landmarks.
+- `gestures`: feature extraction, recognizers, hysteresis, conflict resolution,
+  and the state machine.
+- `controls`: coordinate mapping, smoothing, and abstract/real/fake OS control.
+- `config`: validated settings and calibration data.
+- `ui`: preview, status, and later tray/settings UI.
+- `diagnostics`: logging and performance measurements.
+
+The later mouse controller will be behind an interface, default to disabled/dry
+run, and guarantee release on loss, exceptions, and shutdown. It does not exist
+through Iteration 2; normalized output is visualized in the preview only.
+
+## Data Flow and Privacy
+
+OpenCV acquires a BGR array. The foreground loop mirrors it, converts it to RGB,
+and passes the in-memory array to MediaPipe. Results are converted to immutable
+landmark values. Cursor calculations consume coordinates only and never retain
+frames. No component has a frame-writing or network interface. Closing the loop
+releases the camera, tracker, and preview window.
+
+## Error Model
+
+Expected setup/runtime failures use specific application exceptions and concise
+messages. The CLI returns a nonzero exit code. Cleanup is performed in `finally`
+blocks/context managers. Unexpected failures are logged without logging frames.
+
+## Dependency Policy
+
+Python 3.12 is the baseline because current MediaPipe Windows metadata supports
+it and it is installed in the inspected environment. Runtime versions are pinned
+only after installation/import/test compatibility is demonstrated here. PyAutoGUI
+and PyInstaller are intentionally deferred.
