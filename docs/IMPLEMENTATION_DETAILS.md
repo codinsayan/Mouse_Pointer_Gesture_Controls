@@ -11,8 +11,10 @@ a separate Python installation.
 The foreground OpenCV loop uses MediaPipe Hand Landmarker Tasks in synchronous
 `VIDEO` mode. Configuration, camera, tracking, neutral landmarks, deterministic
 cursor mapping/smoothing, status rendering, and FPS measurement are separate
-modules. Iteration 2 visualizes normalized dry-run cursor output; there is no
-OS-input dependency or behavior.
+modules. Iteration 3 adds scale-independent thumb–index and thumb–middle features,
+temporal pinch recognizers, click-priority coordination, and cursor guarding.
+Cursor and click output remain dry-run; there is no OS-input dependency or
+behavior.
 
 ## Iterations
 
@@ -20,7 +22,7 @@ OS-input dependency or behavior.
 | --------- | --------- | ------ | ----------- | -------- |
 | 01 | Foundation and webcam landmark prototype | Complete | Local mirrored preview, one-hand Tasks tracking, overlay, tests | [Iteration 01](iterations/ITERATION_01_FOUNDATION.md) |
 | 02 | Cursor mapping and smoothing | Complete | Mapped, smoothed, thresholded dry-run target | [Iteration 02](iterations/ITERATION_02_POINTER_MOVEMENT.md) |
-| 03 | Left-click recognition | Not started | Awaiting approval | — |
+| 03 | Left-click recognition | Complete | Thumb–index left and thumb–middle double click | [Iteration 03](iterations/ITERATION_03_GESTURES.md) |
 | 04 | Right-click recognition | Not started | Awaiting approval | — |
 | 05 | Scrolling | Not started | Awaiting approval | — |
 | 06 | Dragging and state-machine hardening | Not started | Awaiting approval | — |
@@ -37,6 +39,7 @@ OS-input dependency or behavior.
 - Webcam preview and one-hand landmarks: implemented; tracker initialization
   verified, interactive webcam visualization awaiting a local manual check.
 - Cursor mapping and smoothing: complete; dry-run preview only.
+- Left/double-click recognition: complete; dry-run only.
 - Gesture recognition and OS mouse events: intentionally absent.
 - Packaging: deferred to Iteration 12.
 
@@ -56,6 +59,16 @@ OS-input dependency or behavior.
   movement threshold, and tracking-loss reset.
 - Iteration 2 intentionally has no screen-size discovery, PyAutoGUI, or real
   input controller. The math can be calibrated before OS input is introduced.
+- Click pinch distances are divided by palm scale. Recognition uses configurable
+  hysteresis, timed activation/release, cooldown, and explicit transitions.
+- Clicks remain dry-run through Iteration 3. Holding an active pinch does not
+  repeat, and tracking loss resets recognition without an activation.
+- Candidate pinches freeze cursor output before finger articulation. Release
+  keeps it frozen for a short delay, then smoothing is reseeded from the frozen
+  output before live input resumes.
+- Thumb–middle pinch produces one double-click action and has priority over
+  thumb–index left click. Both use 30 ms provisional holds and 60 ms debounce.
+- Post-release delay is zero; smoothing reseeds immediately from frozen output.
 
 ## Known Bugs
 
@@ -70,6 +83,10 @@ No unresolved application bugs. Resolved setup/test issues are in the Iteration
 - Cursor defaults are provisional and require real webcam calibration. Index-tip
   raised-state gating belongs to later gesture recognition; Iteration 2 maps the
   tip whenever a hand is tracked.
+- Left-pinch thresholds and timing defaults are provisional and need manual
+  testing across hand sizes, pose angles, lighting, and webcam quality.
+- Thumb–middle double click, conflict priority, and immediate cursor resume have
+  deterministic coverage but still require interactive usability testing.
 - The current MediaPipe privacy notice describes SDK utilization metrics for new
   releases. The selected pre-change 0.10.21 pin reduces this risk, but a network
   audit has not independently proven that version emits no traffic.

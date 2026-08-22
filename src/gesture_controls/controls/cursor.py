@@ -79,6 +79,7 @@ class CursorUpdate:
     smoothed_point: Point2D
     output_point: Point2D
     moved: bool
+    frozen: bool = False
 
 
 class CursorPipeline:
@@ -97,8 +98,25 @@ class CursorPipeline:
         self._minimum_movement = minimum_movement
         self._last_output: Point2D | None = None
 
-    def update(self, camera_point: Point2D, timestamp_seconds: float) -> CursorUpdate:
+    def update(
+        self,
+        camera_point: Point2D,
+        timestamp_seconds: float,
+        freeze: bool = False,
+    ) -> CursorUpdate:
         mapped = map_to_normalized_screen(camera_point, self._region)
+        if freeze:
+            if self._last_output is None:
+                self._last_output = mapped
+                self._smoother.update(mapped, timestamp_seconds)
+            return CursorUpdate(
+                camera_point,
+                mapped,
+                self._last_output,
+                self._last_output,
+                False,
+                True,
+            )
         smoothed = self._smoother.update(mapped, timestamp_seconds)
         moved = (
             self._last_output is None
@@ -108,6 +126,12 @@ class CursorPipeline:
             self._last_output = smoothed
         assert self._last_output is not None
         return CursorUpdate(camera_point, mapped, smoothed, self._last_output, moved)
+
+    def resume_from_frozen_output(self, timestamp_seconds: float) -> None:
+        """Reseed smoothing at the frozen output to prevent a catch-up jump."""
+        self._smoother.reset()
+        if self._last_output is not None:
+            self._smoother.update(self._last_output, timestamp_seconds)
 
     def reset(self) -> None:
         self._smoother.reset()

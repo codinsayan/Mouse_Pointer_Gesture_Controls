@@ -22,7 +22,18 @@ class AppConfig:
     cursor_region_bottom: float = 0.90
     cursor_smoothing_seconds: float = 0.08
     cursor_minimum_movement: float = 0.002
-    window_title: str = "Gesture Controls - Iteration 2 (Dry Run)"
+    left_pinch_activation_ratio: float = 0.30
+    left_pinch_release_ratio: float = 0.42
+    left_pinch_activation_hold_seconds: float = 0.03
+    left_pinch_release_hold_seconds: float = 0.03
+    left_click_cooldown_seconds: float = 0.06
+    double_click_pinch_activation_ratio: float = 0.30
+    double_click_pinch_release_ratio: float = 0.42
+    double_click_activation_hold_seconds: float = 0.03
+    double_click_release_hold_seconds: float = 0.03
+    double_click_cooldown_seconds: float = 0.06
+    post_click_cursor_resume_delay_seconds: float = 0.0
+    window_title: str = "Gesture Controls - Iteration 3 (Dry Run)"
 
     def __post_init__(self) -> None:
         if self.camera_index < 0:
@@ -48,3 +59,24 @@ class AppConfig:
             raise ValueError("cursor_smoothing_seconds must be greater than zero")
         if not 0.0 <= self.cursor_minimum_movement <= 1.0:
             raise ValueError("cursor_minimum_movement must be between 0.0 and 1.0")
+        if not 0.0 < self.left_pinch_activation_ratio < self.left_pinch_release_ratio:
+            raise ValueError("left-pinch ratios must satisfy 0 < activation < release")
+        if not (
+            0.0
+            < self.double_click_pinch_activation_ratio
+            < self.double_click_pinch_release_ratio
+        ):
+            raise ValueError(
+                "double-click pinch ratios must satisfy 0 < activation < release"
+            )
+        for name in (
+            "left_pinch_activation_hold_seconds",
+            "left_pinch_release_hold_seconds",
+            "left_click_cooldown_seconds",
+            "double_click_activation_hold_seconds",
+            "double_click_release_hold_seconds",
+            "double_click_cooldown_seconds",
+            "post_click_cursor_resume_delay_seconds",
+        ):
+            if getattr(self, name) < 0.0:
+                raise ValueError(f"{name} must be zero or greater")

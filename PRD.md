@@ -18,7 +18,9 @@ is local. Camera frames are neither uploaded nor recorded nor permanently stored
 
 - Index raised: pointer movement.
 - Thumb/index pinch: left click; holding and moving: drag.
-- Thumb/little-finger pinch: right click, only when left pinch is inactive.
+- Thumb/middle-finger pinch: double left click.
+- Thumb/ring-finger pinch: right click, only when higher-priority click pinches
+  are inactive.
 - Index and middle raised plus vertical motion: scroll.
 - Open palm or global shortcut: pause.
 - Track no more than one hand and support configurable dominant hand.
@@ -54,7 +56,7 @@ not claims, until measured on representative hardware.
 1. Foundation and webcam landmark prototype.
 2. Cursor mapping and smoothing.
 3. Left-click recognition.
-4. Thumb/little-finger right-click recognition.
+4. Thumb/ring-finger right-click recognition.
 5. Scrolling.
 6. Dragging and gesture state-machine hardening.
 7. Calibration and settings.
@@ -81,3 +83,14 @@ region into clamped normalized screen coordinates, applies frame-rate-independen
 smoothing, suppresses tiny output changes, and resets stale filter state when
 tracking is lost. The dry-run target is visible in the preview. Iteration 2 emits
 no operating-system input and adds no OS-input dependency.
+
+## Iteration 3 Acceptance Criteria
+
+The application computes thumb–index distance relative to palm scale and uses
+configurable activation/release hysteresis, temporal holds, and cooldown to emit
+exactly one dry-run left-click event on each valid activation transition. Holding
+the pinch cannot repeat clicks, and tracking loss resets recognition safely. The
+preview shows ratio, state, and dry-run count. A thumb–middle pinch produces one
+double-click action and has priority over thumb–index left click. Cursor output
+freezes when either pinch becomes a candidate and resumes through reseeded
+smoothing immediately after release. No OS click is generated.

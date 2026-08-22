@@ -74,3 +74,23 @@ def test_pipeline_reset_reacquires_without_stale_interpolation() -> None:
     reacquired = pipeline.update(Point2D(1, 1), 0.1)
     assert reacquired.smoothed_point == Point2D(1, 1)
     assert reacquired.output_point == Point2D(1, 1)
+
+
+def test_pipeline_freeze_keeps_pre_pinch_output() -> None:
+    pipeline = CursorPipeline(CursorRegion(0, 0, 1, 1), 0.01, 0.0)
+    before = pipeline.update(Point2D(0.25, 0.25), 0.0)
+    frozen = pipeline.update(Point2D(0.75, 0.75), 0.1, freeze=True)
+    assert frozen.frozen
+    assert not frozen.moved
+    assert frozen.output_point == before.output_point
+
+
+def test_resume_reseeds_smoothing_from_frozen_output() -> None:
+    pipeline = CursorPipeline(CursorRegion(0, 0, 1, 1), 0.1, 0.0)
+    before = pipeline.update(Point2D(0.25, 0.25), 0.0)
+    pipeline.update(Point2D(0.75, 0.75), 0.1, freeze=True)
+    pipeline.resume_from_frozen_output(0.2)
+    resumed = pipeline.update(Point2D(0.75, 0.75), 0.2)
+    assert resumed.output_point == before.output_point
+    later = pipeline.update(Point2D(0.75, 0.75), 0.3)
+    assert before.output_point.x < later.output_point.x < 0.75

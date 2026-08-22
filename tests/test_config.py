@@ -36,3 +36,31 @@ def test_rejects_invalid_cursor_smoothing() -> None:
 def test_rejects_invalid_minimum_movement() -> None:
     with pytest.raises(ValueError, match="minimum_movement"):
         AppConfig(cursor_minimum_movement=-0.1)
+
+
+def test_rejects_invalid_left_pinch_hysteresis() -> None:
+    with pytest.raises(ValueError, match="left-pinch ratios"):
+        AppConfig(left_pinch_activation_ratio=0.5, left_pinch_release_ratio=0.4)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "left_click_cooldown_seconds",
+        "double_click_activation_hold_seconds",
+        "double_click_release_hold_seconds",
+        "double_click_cooldown_seconds",
+        "post_click_cursor_resume_delay_seconds",
+    ],
+)
+def test_rejects_negative_left_click_timing(field: str) -> None:
+    with pytest.raises(ValueError, match=field):
+        AppConfig(**{field: -0.1})
+
+
+def test_rejects_invalid_double_click_pinch_hysteresis() -> None:
+    with pytest.raises(ValueError, match="double-click pinch ratios"):
+        AppConfig(
+            double_click_pinch_activation_ratio=0.5,
+            double_click_pinch_release_ratio=0.4,
+        )

@@ -16,6 +16,10 @@ main / application loop
   -> tracking.hand_landmarker (MediaPipe Tasks VIDEO inference)
   -> tracking.landmarks (framework-neutral landmark data/utilities)
   -> controls.cursor (normalized mapping, smoothing, movement threshold)
+  -> gestures.features (scale-independent palm and pinch geometry)
+  -> gestures.left_pinch (hysteresis, timing, cooldown, transitions)
+  -> gestures.clicks (double-click priority and left-click suppression)
+  -> gestures.cursor_guard (pinch freeze and delayed resume coordination)
   -> ui.overlay (drawing and status presentation)
   -> diagnostics.fps (monotonic processed-FPS measurement)
 ```
@@ -31,6 +35,19 @@ normalized screen range. An elapsed-time exponential filter smooths the target,
 and a normalized movement threshold suppresses tiny output changes. The pipeline
 resets on tracking loss and cannot emit mouse events.
 
+Iteration 3 normalizes thumb-tip to index-tip distance by the larger of palm
+length and palm width. The left-pinch recognizer applies separate activation and
+release thresholds, timed validation, and post-release cooldown. Only an
+inactive-to-active transition represents a dry-run click. Tracking loss clears
+recognizer history and starts cooldown without emitting a transition.
+
+The final Iteration 3 design uses thumb–index pinch for a single left click and
+thumb–middle pinch for one double-click action. The double-click recognizer has
+priority: while it is candidate, active, or releasing, left-click recognition is
+suppressed and reset. Either candidate freezes cursor output before finger
+articulation can move the target. On release, smoothing is immediately reseeded
+from the frozen output, preventing a catch-up jump without adding resume delay.
+
 ## Planned Boundaries
 
 - `camera`: webcam acquisition and camera failures.
@@ -44,7 +61,7 @@ resets on tracking loss and cannot emit mouse events.
 
 The later mouse controller will be behind an interface, default to disabled/dry
 run, and guarantee release on loss, exceptions, and shutdown. It does not exist
-through Iteration 2; normalized output is visualized in the preview only.
+through Iteration 3; cursor and click results are visualized in the preview only.
 
 ## Data Flow and Privacy
 
