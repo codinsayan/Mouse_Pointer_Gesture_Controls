@@ -10,6 +10,14 @@ from .left_pinch import (
     PinchState,
     PinchUpdate,
 )
+from .scroll import (
+    ScrollAxis,
+    ScrollRecognizer,
+    ScrollState,
+    ScrollTransition,
+    ScrollUpdate,
+)
+from .interactions import GestureCoordinator, InteractionUpdate
 
 __all__ = [
     "GestureTransition",
@@ -25,4 +33,11 @@ __all__ = [
     "PinchUpdate",
     "extract_left_pinch_features",
     "reference_hand_size",
+    "ScrollRecognizer",
+    "ScrollAxis",
+    "ScrollState",
+    "ScrollTransition",
+    "ScrollUpdate",
+    "GestureCoordinator",
+    "InteractionUpdate",
 ]

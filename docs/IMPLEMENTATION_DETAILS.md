@@ -14,8 +14,9 @@ cursor mapping/smoothing, status rendering, and FPS measurement are separate
 modules. Iterations 3–4 add scale-independent thumb–index, thumb–middle, and
 thumb–little features, temporal pinch recognizers, click-priority coordination,
 and cursor guarding.
-Cursor and click output remain dry-run; there is no OS-input dependency or
-behavior.
+Iteration 5 adds normalized finger extension/palm motion, a two-finger scroll
+state machine, and scroll-first gesture-family conflict resolution. Cursor,
+click, and scroll output remain dry-run; there is no OS-input dependency or behavior.
 
 ## Iterations
 
@@ -25,7 +26,7 @@ behavior.
 | 02 | Cursor mapping and smoothing | Complete | Mapped, smoothed, thresholded dry-run target | [Iteration 02](iterations/ITERATION_02_POINTER_MOVEMENT.md) |
 | 03 | Left-click recognition | Complete | Thumb–index left and thumb–middle double click | [Iteration 03](iterations/ITERATION_03_GESTURES.md) |
 | 04 | Thumb–little right-click recognition | Complete | Prioritized transition-only dry-run right click | [Iteration 04](iterations/ITERATION_04_RIGHT_CLICK.md) |
-| 05 | Scrolling | Not started | Awaiting approval | — |
+| 05 | Scrolling | Complete | Exclusive scale-independent two-axis dry-run scrolling | [Iteration 05](iterations/ITERATION_05_SCROLLING.md) |
 | 06 | Dragging and state-machine hardening | Not started | Awaiting approval | — |
 | 07 | Calibration and settings | Not started | Awaiting approval | — |
 | 08 | Safety and tracking-loss recovery | Not started | Awaiting approval | — |
@@ -42,6 +43,7 @@ behavior.
 - Cursor mapping and smoothing: complete; dry-run preview only.
 - Left/double-click recognition: complete; dry-run only.
 - Thumb–little right-click recognition: complete; dry-run only.
+- Two-finger vertical and horizontal scrolling: complete; dry-run only.
 - Operating-system mouse events: intentionally absent; gesture actions remain dry-run only.
 - Packaging: deferred to Iteration 12.
 
@@ -73,6 +75,16 @@ behavior.
 - Thumb–little pinch produces one right-click action. Click conflict priority is
   right, double, then left; this prevents the path toward the little fingertip
   from being claimed as a thumb–middle double click.
+- Vertical scrolling requires index+middle extended and ring+little folded;
+  horizontal scrolling requires middle+ring extended and index+little folded.
+  Pose entry/release use hysteresis and timed validation, and movement uses a
+  stable two-axis wrist/MCP anchor normalized by palm scale.
+- Scroll gestures have priority over all clicks. Claimed frames reset click
+  recognizers, freeze cursor output, and release through smoothing reseed.
+- Scroll displacement is quantized without an unbounded queue and capped at
+  three dry-run steps per processed frame. Defaults remain provisional.
+- The finger pose binds the scroll axis before movement; off-axis displacement is
+  ignored, preventing diagonal motion from mixing horizontal and vertical steps.
 
 ## Known Bugs
 
@@ -93,6 +105,8 @@ No unresolved application bugs. Resolved setup/test issues are in the Iteration
   deterministic coverage but still require interactive usability testing.
 - Thumb–little thresholds and priority behavior require representative webcam
   testing, especially when adjacent fingers move together.
+- Both two-finger pose thresholds, vertical/horizontal direction conventions,
+  dead zone, and step sensitivity require representative webcam testing.
 - The current MediaPipe privacy notice describes SDK utilization metrics for new
   releases. The selected pre-change 0.10.21 pin reduces this risk, but a network
   audit has not independently proven that version emits no traffic.

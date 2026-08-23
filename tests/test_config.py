@@ -53,6 +53,8 @@ def test_rejects_invalid_left_pinch_hysteresis() -> None:
         "right_click_activation_hold_seconds",
         "right_click_release_hold_seconds",
         "right_click_cooldown_seconds",
+        "scroll_activation_hold_seconds",
+        "scroll_release_hold_seconds",
         "post_click_cursor_resume_delay_seconds",
     ],
 )
@@ -72,3 +74,30 @@ def test_rejects_invalid_double_click_pinch_hysteresis() -> None:
 def test_rejects_invalid_right_pinch_hysteresis() -> None:
     with pytest.raises(ValueError, match="right-pinch ratios"):
         AppConfig(right_pinch_activation_ratio=0.5, right_pinch_release_ratio=0.4)
+
+
+def test_rejects_invalid_scroll_extension_hysteresis() -> None:
+    with pytest.raises(ValueError, match="scroll extension ratios"):
+        AppConfig(
+            scroll_extension_activation_ratio=0.10,
+            scroll_extension_release_ratio=0.18,
+        )
+
+
+def test_rejects_invalid_scroll_folded_hysteresis() -> None:
+    with pytest.raises(ValueError, match="scroll folded ratios"):
+        AppConfig(
+            scroll_folded_activation_ratio=0.18,
+            scroll_folded_release_ratio=0.10,
+        )
+
+
+def test_rejects_invalid_scroll_step_distance() -> None:
+    with pytest.raises(ValueError, match="scroll_step_distance_ratio"):
+        AppConfig(scroll_step_distance_ratio=0.0)
+
+
+@pytest.mark.parametrize("value", [0, 1.5, True])
+def test_rejects_invalid_scroll_step_bound(value: object) -> None:
+    with pytest.raises(ValueError, match="scroll_max_steps_per_frame"):
+        AppConfig(scroll_max_steps_per_frame=value)  # type: ignore[arg-type]

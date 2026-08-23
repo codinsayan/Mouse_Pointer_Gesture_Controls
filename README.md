@@ -1,10 +1,10 @@
 # Gesture Controls
 
 Gesture Controls is a Windows-first, local webcam hand-landmark prototype. The
-current code includes **Iterations 1 through 4**: it displays a mirrored camera
+current code includes **Iterations 1 through 5**: it displays a mirrored camera
 preview, one detected hand, a smoothed dry-run cursor target, and a temporally
-validated thumb–index pinch state. It cannot move or click the operating-system
-pointer, scroll, drag, or generate keyboard events.
+validated gesture state. It cannot move, click, or scroll the operating-system
+pointer, drag, or generate keyboard events.
 
 Camera frames remain in memory only. The application contains no recording,
 frame-writing, upload, or OS-input code and runs visibly in the foreground.
@@ -83,6 +83,15 @@ priority is thumb–little right click, thumb–middle double click, then thumb�
 left click. Right click is first so crossing near the middle finger while reaching
 the little finger cannot become a double click. It uses provisional activation `0.30`, release `0.42`,
 activation/release holds `0.03 s`, and debounce `0.06 s`. Holding cannot repeat.
+
+Iteration 5 uses two distinct poses. Extend index+middle and fold ring+little,
+then move up/down for vertical scrolling. Extend middle+ring and fold index+little,
+then move left/right for horizontal scrolling. Each pose fixes its axis and
+off-axis movement is ignored, preventing diagonal mixed output.
+Scrolling suppresses click recognition and freezes the cursor until release. Provisional defaults are
+extension activation/release `0.18/0.10`, folded activation/release `0.10/0.18`,
+activation/release holds `0.06/0.05 s`, one step per `0.08` hand-size units, and
+at most three steps per frame. These values require webcam calibration.
 
 ## Test
 

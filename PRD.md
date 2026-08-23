@@ -20,7 +20,8 @@ is local. Camera frames are neither uploaded nor recorded nor permanently stored
 - Thumb/index pinch: left click; holding and moving: drag.
 - Thumb/middle-finger pinch: double left click.
 - Thumb/little-finger pinch: right click and highest-priority click pinch.
-- Index and middle raised plus vertical motion: scroll.
+- Index and middle raised plus vertical motion: scroll up/down.
+- Middle and ring raised plus horizontal motion: scroll left/right.
 - Open palm or global shortcut: pause.
 - Track no more than one hand and support configurable dominant hand.
 - Configurable sensitivity and smoothing.
@@ -102,3 +103,13 @@ repeat. Conflict priority is right click, double click, then left click; claimed
 higher-priority frames reset lower recognizers. Right-click candidates freeze the
 cursor and release resumes through immediate smoothing reseed. No OS event is
 generated.
+
+## Iteration 5 Acceptance Criteria
+
+The application recognizes index and middle extended for vertical scrolling and
+middle and ring extended for horizontal scrolling, with all other non-thumb
+fingers folded for each pose. It validates poses over time with hysteresis and
+converts palm movement on the pose-bound axis into bounded scale-independent
+dry-run steps. Scrolling has exclusive priority over clicks, freezes cursor
+output, and resets safely on tracking loss. The preview exposes scroll state,
+axis, direction, and step totals. No operating-system wheel event is generated.

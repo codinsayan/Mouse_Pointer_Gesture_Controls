@@ -151,8 +151,8 @@ This list will be updated as implementation proceeds.
 ## Final State
 
 Iteration 4 is complete. Thumb–little pinch is scale-independent, hysteretic,
-temporally validated, cooldown-protected, transition-only, prioritized between
-above double and left click, and reset safely on tracking loss. The preview exposes its
+temporally validated, cooldown-protected, transition-only, prioritized above
+double and left click, and reset safely on tracking loss. The preview exposes its
 state and count; no OS-input API exists.
 
 ## Next Iteration

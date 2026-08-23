@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from gesture_controls.controls import CursorRegion, CursorUpdate
-from gesture_controls.gestures import ClickGestureUpdate, PinchState
+from gesture_controls.gestures import ClickGestureUpdate, PinchState, ScrollUpdate
 from gesture_controls.tracking import TrackingResult
 
 HAND_CONNECTIONS = (
@@ -35,6 +35,12 @@ def draw_overlay(
     dry_run_double_clicks: int = 0,
     dry_run_right_clicks: int = 0,
     last_click_kind: str = "none",
+    scroll_update: ScrollUpdate | None = None,
+    dry_run_scroll_up_steps: int = 0,
+    dry_run_scroll_down_steps: int = 0,
+    dry_run_scroll_left_steps: int = 0,
+    dry_run_scroll_right_steps: int = 0,
+    last_scroll_direction: str = "none",
 ) -> Any:
     import cv2
 
@@ -53,7 +59,7 @@ def draw_overlay(
     if cursor_update is not None:
         target = landmark_to_pixel(cursor_update.output_point.x, cursor_update.output_point.y, width, height)
         cv2.drawMarker(frame, target, (255, 80, 255), cv2.MARKER_CROSS, 18, 2, cv2.LINE_AA)
-    if len(pixels) > 12:
+    if len(pixels) > 20:
         left_color = (
             (0, 80, 255)
             if click_update is not None
@@ -110,12 +116,21 @@ def draw_overlay(
         f"Dry-run double clicks: {dry_run_double_clicks}",
         f"Dry-run right clicks: {dry_run_right_clicks}",
         f"Last click: {last_click_kind}",
+        "Scroll: " + (
+            "N/A" if scroll_update is None
+            else f"{scroll_update.state.value} ({scroll_update.axis.value})"
+        ),
+        "Vertical scroll steps: "
+        f"up {dry_run_scroll_up_steps} / down {dry_run_scroll_down_steps}",
+        "Horizontal scroll steps: "
+        f"left {dry_run_scroll_left_steps} / right {dry_run_scroll_right_steps}",
+        f"Last scroll: {last_scroll_direction}",
         "Press Q or Esc to quit",
     )
     for index, text in enumerate(lines):
-        y = 28 + index * 25
-        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.58,
+        y = 24 + index * 21
+        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.50,
                     (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.58,
+        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.50,
                     (255, 255, 255), 1, cv2.LINE_AA)
     return frame

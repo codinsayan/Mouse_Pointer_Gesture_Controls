@@ -37,8 +37,16 @@ class AppConfig:
     right_click_activation_hold_seconds: float = 0.03
     right_click_release_hold_seconds: float = 0.03
     right_click_cooldown_seconds: float = 0.06
+    scroll_extension_activation_ratio: float = 0.18
+    scroll_extension_release_ratio: float = 0.10
+    scroll_folded_activation_ratio: float = 0.10
+    scroll_folded_release_ratio: float = 0.18
+    scroll_activation_hold_seconds: float = 0.06
+    scroll_release_hold_seconds: float = 0.05
+    scroll_step_distance_ratio: float = 0.08
+    scroll_max_steps_per_frame: int = 3
     post_click_cursor_resume_delay_seconds: float = 0.0
-    window_title: str = "Gesture Controls - Iteration 4 (Dry Run)"
+    window_title: str = "Gesture Controls - Iteration 5 (Dry Run)"
 
     def __post_init__(self) -> None:
         if self.camera_index < 0:
@@ -76,6 +84,30 @@ class AppConfig:
             )
         if not 0.0 < self.right_pinch_activation_ratio < self.right_pinch_release_ratio:
             raise ValueError("right-pinch ratios must satisfy 0 < activation < release")
+        if not (
+            0.0
+            <= self.scroll_extension_release_ratio
+            < self.scroll_extension_activation_ratio
+        ):
+            raise ValueError(
+                "scroll extension ratios must satisfy 0 <= release < activation"
+            )
+        if not (
+            0.0
+            <= self.scroll_folded_activation_ratio
+            < self.scroll_folded_release_ratio
+        ):
+            raise ValueError(
+                "scroll folded ratios must satisfy 0 <= activation < release"
+            )
+        if self.scroll_step_distance_ratio <= 0.0:
+            raise ValueError("scroll_step_distance_ratio must be greater than zero")
+        if (
+            not isinstance(self.scroll_max_steps_per_frame, int)
+            or isinstance(self.scroll_max_steps_per_frame, bool)
+            or self.scroll_max_steps_per_frame < 1
+        ):
+            raise ValueError("scroll_max_steps_per_frame must be at least one")
         for name in (
             "left_pinch_activation_hold_seconds",
             "left_pinch_release_hold_seconds",
@@ -86,6 +118,8 @@ class AppConfig:
             "right_click_activation_hold_seconds",
             "right_click_release_hold_seconds",
             "right_click_cooldown_seconds",
+            "scroll_activation_hold_seconds",
+            "scroll_release_hold_seconds",
             "post_click_cursor_resume_delay_seconds",
         ):
             if getattr(self, name) < 0.0:

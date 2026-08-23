@@ -19,6 +19,8 @@ main / application loop
   -> gestures.features (scale-independent palm and pinch geometry)
   -> gestures.left_pinch (hysteresis, timing, cooldown, transitions)
   -> gestures.clicks (double-click priority and left-click suppression)
+  -> gestures.scroll (two-finger pose and two-axis displacement state machine)
+  -> gestures.interactions (scroll/click conflict resolution)
   -> gestures.cursor_guard (pinch freeze and delayed resume coordination)
   -> ui.overlay (drawing and status presentation)
   -> diagnostics.fps (monotonic processed-FPS measurement)
@@ -56,6 +58,17 @@ the middle fingertip while travelling toward the little fingertip. A claimed
 higher-priority frame resets lower recognizers, guaranteeing one dry-run action
 and preventing action overlap.
 
+Iteration 5 measures finger extension as fingertip reach beyond the PIP joint,
+normalized by palm scale. Index+middle extended with ring+little folded selects
+vertical scrolling; middle+ring extended with index+little folded selects
+horizontal scrolling. Entry and retention thresholds are separate, and pose
+activation/release are temporally validated. Palm motion
+uses the average X/Y position of the wrist and four MCP joints, avoiding
+fingertip-articulation noise. Displacement is normalized by current hand size and
+quantized into bounded signed dry-run steps on the axis assigned by the pose;
+off-axis movement is ignored. The top-level gesture coordinator evaluates
+scrolling before clicks; every claimed scroll frame resets click state.
+
 ## Planned Boundaries
 
 - `camera`: webcam acquisition and camera failures.
@@ -69,7 +82,8 @@ and preventing action overlap.
 
 The later mouse controller will be behind an interface, default to disabled/dry
 run, and guarantee release on loss, exceptions, and shutdown. It does not exist
-through Iteration 4; cursor and click results are visualized in the preview only.
+through Iteration 5; cursor, click, and scroll results are visualized in the
+preview only.
 
 ## Data Flow and Privacy
 
