@@ -18,6 +18,10 @@ from .scroll import (
     ScrollUpdate,
 )
 from .interactions import GestureCoordinator, InteractionUpdate
+from .drag import DragAction, DragRecognizer, DragState, DragUpdate
+from .fist import FistRecognizer, FistState, FistTransition, FistUpdate
+from .zoom import ZoomRecognizer, ZoomState, ZoomTransition, ZoomUpdate
+from .interactions import GestureAction
 
 __all__ = [
     "GestureTransition",
@@ -40,4 +44,17 @@ __all__ = [
     "ScrollUpdate",
     "GestureCoordinator",
     "InteractionUpdate",
+    "GestureAction",
+    "DragAction",
+    "DragRecognizer",
+    "DragState",
+    "DragUpdate",
+    "FistRecognizer",
+    "FistState",
+    "FistTransition",
+    "FistUpdate",
+    "ZoomRecognizer",
+    "ZoomState",
+    "ZoomTransition",
+    "ZoomUpdate",
 ]

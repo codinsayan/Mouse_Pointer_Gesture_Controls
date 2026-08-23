@@ -17,11 +17,15 @@ is local. Camera frames are neither uploaded nor recorded nor permanently stored
 ## Functional Requirements
 
 - Index raised: pointer movement.
-- Thumb/index pinch: left click; holding and moving: drag.
+- Thumb/index pinch: left click.
+- Close all four non-thumb fingers into a fist, hold deliberately, then move the
+  hand: drag; opening the fist releases.
 - Thumb/middle-finger pinch: double left click.
 - Thumb/little-finger pinch: right click and highest-priority click pinch.
 - Index and middle raised plus vertical motion: scroll up/down.
 - Middle and ring raised plus horizontal motion: scroll left/right.
+- Thumb-ring pose with index, middle, and little held open: spreading zooms in
+  and contracting zooms out; the ring remains free to articulate.
 - Open palm or global shortcut: pause.
 - Track no more than one hand and support configurable dominant hand.
 - Configurable sensitivity and smoothing.
@@ -113,3 +117,30 @@ converts palm movement on the pose-bound axis into bounded scale-independent
 dry-run steps. Scrolling has exclusive priority over clicks, freezes cursor
 output, and resets safely on tracking loss. The preview exposes scroll state,
 axis, direction, and step totals. No operating-system wheel event is generated.
+
+## Iteration 6 Acceptance Criteria
+
+The application recognizes a fist when all four non-thumb fingers are folded
+using palm-scale-normalized joint geometry, then requires a deliberate 250 ms
+hold after pose validation before emitting one dry-run drag-start transition.
+Relative palm movement drives the cursor from its pre-drag position, using a
+finer movement threshold for precise selection without a closure jump.
+Release, tracking loss, a higher-priority conflict, reset, exception, or shutdown
+emits at most one matching drag-end transition. The application also recognizes
+a distinct thumb-ring zoom pose, converts normalized expansion/contraction into
+bounded dry-run zoom-in/out steps, and prevents zoom from leaking clicks. Priority
+is scrolling, fist drag, zoom, right click, double click, then left click. The
+overlay exposes fist, drag, and zoom state and totals. No operating-system mouse
+or keyboard event is generated.
+
+## Iteration 7 Acceptance Criteria
+
+The application loads and saves versioned local JSON settings with strict schema,
+field, type, and semantic validation. Profiles expose reported hand preference,
+cursor sensitivity/smoothing, cursor region, and gesture/calibration settings;
+explicit CLI camera/model values override profiles at runtime. The user can start
+cursor calibration from the visible preview, collect transient normalized
+index-tip coordinates while normal gestures are suspended, apply a robust region
+only after sample/coverage validation, or cancel. Applied calibration updates the
+running cursor immediately and is persisted atomically only when a profile path
+was explicitly selected. No frames or OS input events are stored or generated.

@@ -2,39 +2,72 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from pathlib import Path
 from time import perf_counter_ns
 
 from gesture_controls.camera import CameraCapture
-from gesture_controls.config import AppConfig
-from gesture_controls.controls import CursorPipeline, CursorRegion, Point2D
+from gesture_controls.config import AppConfig, save_config
+from gesture_controls.controls import (
+    CursorCalibrator,
+    CursorPipeline,
+    CursorRegion,
+    Point2D,
+    RelativeDragMapper,
+)
 from gesture_controls.diagnostics import FpsMeter
 from gesture_controls.gestures import (
-    ClickAction,
     ClickCursorGuard,
     ClickGestureCoordinator,
+    DragRecognizer,
+    DragState,
+    FistRecognizer,
+    GestureAction,
     GestureCoordinator,
     PinchRecognizer,
     ScrollRecognizer,
+    ZoomRecognizer,
     extract_left_pinch_features,
 )
-from gesture_controls.tracking import HandLandmarkerTracker
+from gesture_controls.tracking import HandLandmarkerTracker, hand_matches_preference
 from gesture_controls.ui import draw_overlay
 
 
-def run(config: AppConfig) -> None:
-    import cv2
-
-    fps_meter = FpsMeter()
-    cursor_region = CursorRegion(
+def _cursor_components(
+    config: AppConfig,
+) -> tuple[CursorRegion, CursorPipeline, RelativeDragMapper]:
+    region = CursorRegion(
         config.cursor_region_left,
         config.cursor_region_top,
         config.cursor_region_right,
         config.cursor_region_bottom,
     )
-    cursor_pipeline = CursorPipeline(
-        cursor_region,
+    pipeline = CursorPipeline(
+        region,
         config.cursor_smoothing_seconds,
         config.cursor_minimum_movement,
+        config.cursor_sensitivity,
+    )
+    return region, pipeline, RelativeDragMapper(region, config.cursor_sensitivity)
+
+
+def run(
+    config: AppConfig,
+    profile_path: Path | None = None,
+    profile_config: AppConfig | None = None,
+) -> None:
+    import cv2
+
+    profile_config = config if profile_config is None else profile_config
+
+    fps_meter = FpsMeter()
+    cursor_region, cursor_pipeline, drag_motion = _cursor_components(config)
+    calibrator = CursorCalibrator(
+        config.calibration_min_samples,
+        config.calibration_low_quantile,
+        config.calibration_high_quantile,
+        config.calibration_padding_ratio,
+        config.calibration_minimum_span,
     )
     scroll_gesture = ScrollRecognizer(
         config.scroll_extension_activation_ratio,
@@ -71,11 +104,32 @@ def run(config: AppConfig) -> None:
                 config.right_click_cooldown_seconds,
             ),
         ),
+        FistRecognizer(
+            config.fist_folded_activation_ratio,
+            config.fist_folded_release_ratio,
+            config.fist_activation_hold_seconds,
+            config.fist_release_hold_seconds,
+        ),
+        DragRecognizer(config.drag_activation_hold_seconds),
+        ZoomRecognizer(
+            config.zoom_span_activation_ratio,
+            config.zoom_span_release_ratio,
+            config.zoom_other_fingers_extension_activation_ratio,
+            config.zoom_other_fingers_extension_release_ratio,
+            config.zoom_activation_hold_seconds,
+            config.zoom_release_hold_seconds,
+            config.zoom_step_distance_ratio,
+            config.zoom_max_steps_per_frame,
+        ),
     )
     cursor_guard = ClickCursorGuard(config.post_click_cursor_resume_delay_seconds)
     dry_run_left_clicks = 0
     dry_run_double_clicks = 0
     dry_run_right_clicks = 0
+    dry_run_drag_starts = 0
+    dry_run_drag_ends = 0
+    dry_run_zoom_in_steps = 0
+    dry_run_zoom_out_steps = 0
     dry_run_scroll_up_steps = 0
     dry_run_scroll_down_steps = 0
     dry_run_scroll_left_steps = 0
@@ -83,6 +137,8 @@ def run(config: AppConfig) -> None:
     last_click_kind = "none"
     last_scroll_direction = "none"
     scroll_was_claiming = False
+    fist_was_claiming = False
+    zoom_was_claiming = False
     last_timestamp_ms = -1
     try:
         with HandLandmarkerTracker(config) as tracker, CameraCapture(config) as camera:
@@ -97,12 +153,48 @@ def run(config: AppConfig) -> None:
                 cursor_update = None
                 click_update = None
                 scroll_update = None
-                if len(result.landmarks) >= 21:
+                drag_update = None
+                fist_update = None
+                zoom_update = None
+                hand_accepted = len(result.landmarks) >= 21 and hand_matches_preference(
+                    result.handedness, config.dominant_hand
+                )
+                if hand_accepted and not calibrator.collecting:
                     index_tip = result.landmarks[8]
                     pinch_features = extract_left_pinch_features(result.landmarks)
                     interaction = gestures.update(pinch_features, now_seconds)
                     scroll_update = interaction.scroll
                     click_update = interaction.click
+                    drag_update = interaction.drag
+                    fist_update = interaction.fist
+                    zoom_update = interaction.zoom
+                    if interaction.action is GestureAction.LEFT_CLICK:
+                        dry_run_left_clicks += 1
+                        last_click_kind = "left (thumb-index)"
+                    elif interaction.action is GestureAction.DOUBLE_CLICK:
+                        dry_run_double_clicks += 1
+                        last_click_kind = "double (thumb-middle)"
+                    elif interaction.action is GestureAction.RIGHT_CLICK:
+                        dry_run_right_clicks += 1
+                        last_click_kind = "right (thumb-little)"
+                    elif interaction.action is GestureAction.DRAG_STARTED:
+                        dry_run_drag_starts += 1
+                        cursor_origin = cursor_pipeline.output_point
+                        if cursor_origin is not None:
+                            drag_motion.start(
+                                Point2D(
+                                    pinch_features.palm_anchor_x,
+                                    pinch_features.palm_anchor_y,
+                                ),
+                                cursor_origin,
+                            )
+                    elif interaction.action is GestureAction.DRAG_ENDED:
+                        dry_run_drag_ends += 1
+                        drag_motion.reset()
+                    if zoom_update.steps > 0:
+                        dry_run_zoom_in_steps += zoom_update.steps
+                    elif zoom_update.steps < 0:
+                        dry_run_zoom_out_steps += -zoom_update.steps
                     if scroll_update.steps > 0:
                         dry_run_scroll_up_steps += scroll_update.steps
                         last_scroll_direction = "up"
@@ -115,37 +207,77 @@ def run(config: AppConfig) -> None:
                     elif scroll_update.horizontal_steps < 0:
                         dry_run_scroll_left_steps += -scroll_update.horizontal_steps
                         last_scroll_direction = "left"
-                    if scroll_update.claims_frame:
+                    if (
+                        scroll_update.claims_frame
+                        or fist_update.claims_frame
+                        or zoom_update.claims_frame
+                    ):
                         cursor_guard.reset()
-                        freeze_cursor = True
+                        freeze_cursor = interaction.cursor_should_freeze
                     else:
-                        if scroll_was_claiming:
+                        if (
+                            scroll_was_claiming
+                            or fist_was_claiming
+                            or zoom_was_claiming
+                        ):
                             cursor_pipeline.resume_from_frozen_output(now_seconds)
                         assert click_update is not None
-                        if click_update.action is ClickAction.LEFT_CLICK:
-                            dry_run_left_clicks += 1
-                            last_click_kind = "left (thumb-index)"
-                        elif click_update.action is ClickAction.DOUBLE_CLICK:
-                            dry_run_double_clicks += 1
-                            last_click_kind = "double (thumb-middle)"
-                        elif click_update.action is ClickAction.RIGHT_CLICK:
-                            dry_run_right_clicks += 1
-                            last_click_kind = "right (thumb-little)"
-                        guard = cursor_guard.update(click_update.selected, now_seconds)
-                        if guard.resume_smoothing:
+                        if interaction.action is GestureAction.DRAG_STARTED:
                             cursor_pipeline.resume_from_frozen_output(now_seconds)
-                        freeze_cursor = guard.freeze
+                        if drag_update.state is DragState.DRAGGING:
+                            cursor_guard.reset()
+                            freeze_cursor = False
+                        else:
+                            guard = cursor_guard.update(
+                                click_update.selected, now_seconds
+                            )
+                            if guard.resume_smoothing:
+                                cursor_pipeline.resume_from_frozen_output(now_seconds)
+                            freeze_cursor = guard.freeze
+                    camera_point = Point2D(index_tip.x, index_tip.y)
+                    mapped_drag_target = None
+                    if drag_update.state is DragState.DRAGGING:
+                        camera_point = Point2D(
+                            pinch_features.palm_anchor_x,
+                            pinch_features.palm_anchor_y,
+                        )
+                        mapped_drag_target = drag_motion.update(camera_point)
                     cursor_update = cursor_pipeline.update(
-                        Point2D(index_tip.x, index_tip.y),
+                        camera_point,
                         now_seconds,
                         freeze=freeze_cursor,
+                        minimum_movement_override=(
+                            config.drag_cursor_minimum_movement
+                            if drag_update.state is DragState.DRAGGING
+                            else None
+                        ),
+                        mapped_point_override=mapped_drag_target,
                     )
                     scroll_was_claiming = scroll_update.claims_frame
-                else:
-                    cursor_pipeline.reset()
+                    fist_was_claiming = fist_update.claims_frame
+                    zoom_was_claiming = zoom_update.claims_frame
+                elif hand_accepted:
+                    index_tip = result.landmarks[8]
+                    calibration_point = Point2D(index_tip.x, index_tip.y)
+                    calibrator.add(calibration_point)
                     gestures.reset(now_seconds)
                     cursor_guard.reset()
+                    drag_motion.reset()
                     scroll_was_claiming = False
+                    fist_was_claiming = False
+                    zoom_was_claiming = False
+                    cursor_update = cursor_pipeline.update(
+                        calibration_point, now_seconds, freeze=True
+                    )
+                else:
+                    cursor_pipeline.reset()
+                    if gestures.reset(now_seconds) is GestureAction.DRAG_ENDED:
+                        dry_run_drag_ends += 1
+                    cursor_guard.reset()
+                    drag_motion.reset()
+                    scroll_was_claiming = False
+                    fist_was_claiming = False
+                    zoom_was_claiming = False
                 fps = fps_meter.update(now_seconds)
                 cv2.imshow(
                     config.window_title,
@@ -166,12 +298,61 @@ def run(config: AppConfig) -> None:
                         dry_run_scroll_left_steps,
                         dry_run_scroll_right_steps,
                         last_scroll_direction,
+                        drag_update,
+                        dry_run_drag_starts,
+                        dry_run_drag_ends,
+                        fist_update,
+                        zoom_update,
+                        dry_run_zoom_in_steps,
+                        dry_run_zoom_out_steps,
+                        config.dominant_hand,
+                        hand_accepted,
+                        calibrator.status,
+                        profile_path is not None,
                     ),
                 )
                 key = cv2.waitKey(1) & 0xFF
+                if key in (ord("c"), ord("C")):
+                    gestures.reset(now_seconds)
+                    cursor_guard.reset()
+                    drag_motion.reset()
+                    cursor_pipeline.reset()
+                    calibrator.start()
+                    scroll_was_claiming = False
+                    fist_was_claiming = False
+                    zoom_was_claiming = False
+                    continue
+                if key in (ord("x"), ord("X")) and calibrator.collecting:
+                    calibrator.cancel()
+                    cursor_pipeline.reset()
+                    continue
+                if key in (10, 13) and calibrator.collecting:
+                    calibrated_region = calibrator.finish()
+                    if calibrated_region is not None:
+                        config = replace(
+                            config,
+                            cursor_region_left=calibrated_region.left,
+                            cursor_region_top=calibrated_region.top,
+                            cursor_region_right=calibrated_region.right,
+                            cursor_region_bottom=calibrated_region.bottom,
+                        )
+                        cursor_region, cursor_pipeline, drag_motion = (
+                            _cursor_components(config)
+                        )
+                        if profile_path is not None:
+                            profile_config = replace(
+                                profile_config,
+                                cursor_region_left=calibrated_region.left,
+                                cursor_region_top=calibrated_region.top,
+                                cursor_region_right=calibrated_region.right,
+                                cursor_region_bottom=calibrated_region.bottom,
+                            )
+                            save_config(profile_path, profile_config)
+                    continue
                 if key in (ord("q"), ord("Q"), 27):
                     break
                 if cv2.getWindowProperty(config.window_title, cv2.WND_PROP_VISIBLE) < 1:
                     break
     finally:
+        gestures.reset(perf_counter_ns() / 1_000_000_000)
         cv2.destroyAllWindows()

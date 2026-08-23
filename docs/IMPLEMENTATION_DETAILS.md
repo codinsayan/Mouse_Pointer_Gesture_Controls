@@ -16,7 +16,12 @@ thumb–little features, temporal pinch recognizers, click-priority coordination
 and cursor guarding.
 Iteration 5 adds normalized finger extension/palm motion, a two-finger scroll
 state machine, and scroll-first gesture-family conflict resolution. Cursor,
-click, and scroll output remain dry-run; there is no OS-input dependency or behavior.
+click, and scroll output remain dry-run. Iteration 6 adds a scale-independent
+fist pose, a separate armed/dragging state machine, relative palm-motion cursor
+tracking, one-shot release safety, and bounded thumb-ring expansion/contraction
+zoom. There is no OS-input dependency or behavior. Iteration 7 adds strict local
+JSON profiles, reported-hand filtering, cursor sensitivity, and transient
+landmark-only cursor calibration with optional explicit persistence.
 
 ## Iterations
 
@@ -27,8 +32,8 @@ click, and scroll output remain dry-run; there is no OS-input dependency or beha
 | 03 | Left-click recognition | Complete | Thumb–index left and thumb–middle double click | [Iteration 03](iterations/ITERATION_03_GESTURES.md) |
 | 04 | Thumb–little right-click recognition | Complete | Prioritized transition-only dry-run right click | [Iteration 04](iterations/ITERATION_04_RIGHT_CLICK.md) |
 | 05 | Scrolling | Complete | Exclusive scale-independent two-axis dry-run scrolling | [Iteration 05](iterations/ITERATION_05_SCROLLING.md) |
-| 06 | Dragging and state-machine hardening | Not started | Awaiting approval | — |
-| 07 | Calibration and settings | Not started | Awaiting approval | — |
+| 06 | Dragging and state-machine hardening | Complete | Held-fist drag plus bounded thumb-ring dry-run zoom | [Iteration 06](iterations/ITERATION_06_DRAGGING.md) |
+| 07 | Calibration and settings | Complete | Validated local profiles and robust interactive cursor calibration | [Iteration 07](iterations/ITERATION_07_CALIBRATION_AND_SETTINGS.md) |
 | 08 | Safety and tracking-loss recovery | Not started | Awaiting approval | — |
 | 09 | UI and system tray | Not started | Awaiting approval | — |
 | 10 | Automated and real-world testing | Not started | Awaiting approval | — |
@@ -44,6 +49,15 @@ click, and scroll output remain dry-run; there is no OS-input dependency or beha
 - Left/double-click recognition: complete; dry-run only.
 - Thumb–little right-click recognition: complete; dry-run only.
 - Two-finger vertical and horizontal scrolling: complete; dry-run only.
+- Held-fist dragging: complete; precise dry-run target and transition
+  counters only.
+- Thumb-ring expansion/contraction zoom: complete; bounded dry-run steps only.
+- Versioned local settings profiles: complete; strict validation and atomic
+  explicit writes.
+- Reported hand preference and cursor sensitivity: complete; webcam behavior
+  still needs representative manual checks.
+- Cursor-region calibration: complete; session apply and optional selected-profile
+  persistence using transient normalized coordinates only.
 - Operating-system mouse events: intentionally absent; gesture actions remain dry-run only.
 - Packaging: deferred to Iteration 12.
 
@@ -85,6 +99,37 @@ click, and scroll output remain dry-run; there is no OS-input dependency or beha
   three dry-run steps per processed frame. Defaults remain provisional.
 - The finger pose binds the scroll axis before movement; off-axis displacement is
   ignored, preventing diagonal motion from mixing horizontal and vertical steps.
+- A fist requires all four non-thumb finger extension ratios at or below `0.10`;
+  release hysteresis retains it through `0.18`. Pose entry/release use 60/50 ms
+  validation, followed by an additional 250 ms drag-intent hold.
+- Gesture conflict priority is scroll, fist drag, thumb-little right click,
+  thumb-middle double click, then thumb-index left click.
+- Cursor output freezes while drag is a candidate or armed. At drag start the
+  smoother resumes from the frozen output, and the movement threshold drops from
+  `0.002` to `0.0005` for fine control while retaining elapsed-time smoothing.
+- Drag start/end are transitions rather than per-frame actions. Release, tracking
+  loss, conflict, reset, exception, and shutdown clear active drag state once.
+- Zoom uses normalized thumb-ring span with a distinct pose: index, middle, and
+  little extension must each be at least `0.12`, while the ring remains free to
+  articulate. A `0.08` retention threshold provides pose hysteresis.
+- Zoom activates at span `0.45` or below, releases above `0.85`, validates entry
+  and release for 60/50 ms, and quantizes each `0.08` span change into a signed
+  step capped at three per frame without retaining a backlog. Expansion is zoom
+  in and contraction is zoom out.
+- Conflict priority is scroll, fist drag, zoom, right click, double click, then
+  left click. Claimed zoom frames reset click recognition and freeze the cursor.
+- Settings profiles use schema version 1 and standard-library JSON. Unknown root
+  or setting fields and wrong types are rejected before `AppConfig` validates
+  ranges and cross-field ordering. Writes are atomic replacements.
+- CLI camera/model options override profile values at runtime and are deliberately
+  not persisted when calibration updates a selected profile.
+- `dominant_hand` is `any`, `left`, or `right` and matches MediaPipe's reported
+  label case-insensitively. A missing label is rejected for a specific preference.
+- Cursor sensitivity scales mapped coordinates around screen center and relative
+  fist-drag displacement; the validated range is `0.1..3.0`.
+- Calibration retains only normalized index-tip points. Defaults require 60
+  samples, 5th/95th percentile bounds, at least `0.25` span on both axes, and 5%
+  padding. Normal gesture processing is suspended during collection.
 
 ## Known Bugs
 
@@ -107,6 +152,13 @@ No unresolved application bugs. Resolved setup/test issues are in the Iteration
   testing, especially when adjacent fingers move together.
 - Both two-finger pose thresholds, vertical/horizontal direction conventions,
   dead zone, and step sensitivity require representative webcam testing.
+- Fist folded thresholds, the additional 250 ms intent hold, smoothing, and
+  `0.0005` drag movement threshold require interactive tests for text selection
+  and icon movement. Camera FPS and perceived drag latency remain unmeasured.
+- Zoom pose/span thresholds, direction convention, and step sensitivity require
+  representative webcam usability testing.
+- Mirrored-feed handedness labels and interactive calibration ergonomics require
+  a live webcam check. Incorrect preferred-hand selection safely ignores tracking.
 - The current MediaPipe privacy notice describes SDK utilization metrics for new
   releases. The selected pre-change 0.10.21 pin reduces this risk, but a network
   audit has not independently proven that version emits no traffic.
@@ -120,6 +172,8 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 Invoke-WebRequest -Uri "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" -OutFile "assets/models/hand_landmarker.task"
 .\.venv\Scripts\python.exe -m gesture_controls.main
+.\.venv\Scripts\python.exe -m gesture_controls.main --write-default-config settings.json
+.\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json
 ```
 
 ## Test and Build Commands

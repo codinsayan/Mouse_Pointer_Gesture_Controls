@@ -25,7 +25,7 @@ class ClickGestureUpdate:
 
 
 class ClickGestureCoordinator:
-    """Resolve click priority as thumb–little, thumb–middle, then thumb–index."""
+    """Resolve click priority as thumb-little, thumb-middle, then thumb-index."""
 
     def __init__(
         self,

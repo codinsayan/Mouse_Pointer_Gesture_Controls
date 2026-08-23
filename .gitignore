@@ -4,6 +4,8 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.pytest-tmp/
+.test-artifacts/
 pytest-cache-files-*/
 .coverage
 htmlcov/

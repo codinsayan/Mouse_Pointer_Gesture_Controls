@@ -20,3 +20,6 @@ class ModelAssetError(GestureControlsError):
 class TrackerInitializationError(GestureControlsError):
     """Raised when MediaPipe cannot initialize the hand tracker."""
 
+
+class ConfigurationError(GestureControlsError):
+    """Raised when a local settings profile cannot be loaded or saved safely."""

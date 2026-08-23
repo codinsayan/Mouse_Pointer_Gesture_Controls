@@ -6,8 +6,10 @@ from .cursor import (
     CursorUpdate,
     ExponentialSmoother,
     Point2D,
+    RelativeDragMapper,
     map_to_normalized_screen,
 )
+from .calibration import CalibrationState, CalibrationStatus, CursorCalibrator
 
 __all__ = [
     "CursorPipeline",
@@ -15,5 +17,9 @@ __all__ = [
     "CursorUpdate",
     "ExponentialSmoother",
     "Point2D",
+    "RelativeDragMapper",
     "map_to_normalized_screen",
+    "CalibrationState",
+    "CalibrationStatus",
+    "CursorCalibrator",
 ]

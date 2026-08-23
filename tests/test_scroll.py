@@ -3,6 +3,10 @@ import pytest
 from gesture_controls.gestures import (
     ClickAction,
     ClickGestureCoordinator,
+    DragRecognizer,
+    DragState,
+    FistRecognizer,
+    GestureAction,
     GestureCoordinator,
     PinchFeatures,
     PinchRecognizer,
@@ -10,6 +14,8 @@ from gesture_controls.gestures import (
     ScrollAxis,
     ScrollState,
     ScrollTransition,
+    ZoomRecognizer,
+    ZoomState,
 )
 
 
@@ -25,11 +31,13 @@ def features(
     left: float = 0.8,
     double: float = 0.8,
     right: float = 0.8,
+    zoom: float = 0.8,
 ) -> PinchFeatures:
     return PinchFeatures(
         left,
         double,
         right,
+        zoom,
         hand_size,
         index,
         middle,
@@ -52,6 +60,7 @@ def horizontal_features(
     left: float = 0.8,
     double: float = 0.8,
     right: float = 0.8,
+    zoom: float = 0.8,
 ) -> PinchFeatures:
     return features(
         index=0.05,
@@ -64,6 +73,7 @@ def horizontal_features(
         left=left,
         double=double,
         right=right,
+        zoom=zoom,
     )
 
 
@@ -72,6 +82,16 @@ def click_coordinator() -> ClickGestureCoordinator:
         PinchRecognizer(0.30, 0.42, 0.03, 0.03, 0.06),
         PinchRecognizer(0.30, 0.42, 0.03, 0.03, 0.06),
         PinchRecognizer(0.30, 0.42, 0.03, 0.03, 0.06),
+    )
+
+
+def interaction_coordinator() -> GestureCoordinator:
+    return GestureCoordinator(
+        recognizer(),
+        click_coordinator(),
+        FistRecognizer(0.10, 0.18, 0.06, 0.05),
+        DragRecognizer(0.25),
+        ZoomRecognizer(0.45, 0.85, 0.12, 0.08, 0.06, 0.05, 0.08, 3),
     )
 
 
@@ -214,7 +234,7 @@ def test_reset_and_non_monotonic_timestamp_handling() -> None:
 def test_scroll_claim_suppresses_click_even_when_pinch_ratio_is_active(
     conflicting: PinchFeatures,
 ) -> None:
-    item = GestureCoordinator(recognizer(), click_coordinator())
+    item = interaction_coordinator()
     first = item.update(conflicting, 0.0)
     assert first.scroll.state is ScrollState.CANDIDATE
     assert first.click is None
@@ -224,9 +244,98 @@ def test_scroll_claim_suppresses_click_even_when_pinch_ratio_is_active(
 
 
 def test_clicks_are_evaluated_when_scroll_pose_is_inactive() -> None:
-    item = GestureCoordinator(recognizer(), click_coordinator())
-    click_pose = features(index=0.0, middle=0.0, left=0.2)
+    item = interaction_coordinator()
+    click_pose = features(index=0.0, middle=0.0, ring=0.2, left=0.2)
     assert item.update(click_pose, 0.0).click is not None
     update = item.update(click_pose, 0.03)
     assert update.click is not None
     assert update.click.action is ClickAction.LEFT_CLICK
+    assert update.action is GestureAction.LEFT_CLICK
+
+
+def test_fist_hold_starts_precise_drag_and_opening_ends_it() -> None:
+    item = interaction_coordinator()
+    fist_pose = features(index=0.05, middle=0.05, ring=0.05, little=0.05)
+    candidate = item.update(fist_pose, 0.0)
+    assert candidate.cursor_should_freeze
+    armed = item.update(fist_pose, 0.06)
+    assert armed.drag.state is DragState.ARMED
+    assert armed.cursor_should_freeze
+    started = item.update(fist_pose, 0.31)
+    assert started.action is GestureAction.DRAG_STARTED
+    assert started.drag.state is DragState.DRAGGING
+    assert not started.cursor_should_freeze
+    ended = item.update(
+        features(index=0.25, middle=0.05, ring=0.05, little=0.05), 0.32
+    )
+    assert ended.action is GestureAction.DRAG_ENDED
+    assert ended.drag.state is DragState.IDLE
+
+
+def test_scroll_conflict_ends_an_active_fist_drag() -> None:
+    item = interaction_coordinator()
+    fist_pose = features(index=0.05, middle=0.05, ring=0.05, little=0.05)
+    item.update(fist_pose, 0.0)
+    item.update(fist_pose, 0.06)
+    item.update(fist_pose, 0.31)
+    ended = item.update(features(), 0.32)
+    assert ended.scroll.claims_frame
+    assert ended.action is GestureAction.DRAG_ENDED
+
+
+def test_tracking_reset_ends_drag_exactly_once() -> None:
+    item = interaction_coordinator()
+    fist_pose = features(index=0.05, middle=0.05, ring=0.05, little=0.05)
+    item.update(fist_pose, 0.0)
+    item.update(fist_pose, 0.06)
+    item.update(fist_pose, 0.31)
+    assert item.reset(0.32) is GestureAction.DRAG_ENDED
+    assert item.reset(0.33) is GestureAction.NONE
+
+
+def test_fist_candidate_suppresses_all_click_pinches() -> None:
+    item = interaction_coordinator()
+    fist_with_conflicting_pinches = features(
+        index=0.05,
+        middle=0.05,
+        ring=0.05,
+        little=0.05,
+        left=0.2,
+        double=0.2,
+        right=0.2,
+    )
+    update = item.update(fist_with_conflicting_pinches, 0.0)
+    assert update.fist.claims_frame
+    assert update.click is None
+
+
+def test_zoom_expansion_and_contraction_emit_exclusive_signed_steps() -> None:
+    item = interaction_coordinator()
+    pose = features(index=0.15, middle=0.15, ring=0.05, little=0.15, zoom=0.40)
+    candidate = item.update(pose, 0.0)
+    assert candidate.zoom.state is ZoomState.CANDIDATE
+    assert candidate.click is None
+    active = item.update(pose, 0.06)
+    assert active.zoom.state is ZoomState.ACTIVE
+    zoom_in = item.update(
+        features(index=0.15, middle=0.15, ring=0.05, little=0.15, zoom=0.49),
+        0.07,
+    )
+    assert zoom_in.zoom.steps == 1
+    zoom_out = item.update(pose, 0.08)
+    assert zoom_out.zoom.steps == -1
+
+
+def test_fist_and_scroll_have_priority_over_zoom() -> None:
+    item = interaction_coordinator()
+    fist = item.update(
+        features(index=0.05, middle=0.05, ring=0.05, little=0.05, zoom=0.4),
+        0.0,
+    )
+    assert fist.fist.claims_frame
+    assert fist.zoom.state is ZoomState.INACTIVE
+
+    item.reset(0.01)
+    scroll = item.update(features(zoom=0.4), 0.02)
+    assert scroll.scroll.claims_frame
+    assert scroll.zoom.state is ZoomState.INACTIVE

@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from gesture_controls.controls import CursorRegion, CursorUpdate
-from gesture_controls.gestures import ClickGestureUpdate, PinchState, ScrollUpdate
+from gesture_controls.controls import CalibrationStatus, CursorRegion, CursorUpdate
+from gesture_controls.gestures import (
+    ClickGestureUpdate,
+    DragState,
+    DragUpdate,
+    FistUpdate,
+    PinchState,
+    ScrollUpdate,
+    ZoomState,
+    ZoomUpdate,
+)
 from gesture_controls.tracking import TrackingResult
 
 HAND_CONNECTIONS = (
@@ -41,6 +50,17 @@ def draw_overlay(
     dry_run_scroll_left_steps: int = 0,
     dry_run_scroll_right_steps: int = 0,
     last_scroll_direction: str = "none",
+    drag_update: DragUpdate | None = None,
+    dry_run_drag_starts: int = 0,
+    dry_run_drag_ends: int = 0,
+    fist_update: FistUpdate | None = None,
+    zoom_update: ZoomUpdate | None = None,
+    dry_run_zoom_in_steps: int = 0,
+    dry_run_zoom_out_steps: int = 0,
+    dominant_hand: str = "any",
+    hand_accepted: bool = True,
+    calibration_status: CalibrationStatus | None = None,
+    calibration_persistence_enabled: bool = False,
 ) -> Any:
     import cv2
 
@@ -78,17 +98,29 @@ def draw_overlay(
             and click_update.right.state is PinchState.ACTIVE
             else (180, 180, 180)
         )
+        zoom_color = (
+            (180, 80, 255)
+            if zoom_update is not None
+            and zoom_update.state is ZoomState.ACTIVE
+            else (180, 180, 180)
+        )
         cv2.line(frame, pixels[4], pixels[8], left_color, 3, cv2.LINE_AA)
         cv2.line(frame, pixels[4], pixels[12], double_color, 3, cv2.LINE_AA)
         cv2.line(frame, pixels[4], pixels[20], right_color, 3, cv2.LINE_AA)
+        cv2.line(frame, pixels[4], pixels[16], zoom_color, 3, cv2.LINE_AA)
 
-    hand = "Detected" if result.hand_detected else "Not detected"
+    hand = (
+        "Detected"
+        if result.hand_detected and hand_accepted
+        else ("Ignored by preference" if result.hand_detected else "Not detected")
+    )
     handedness = result.handedness or "N/A"
     confidence = "N/A" if result.confidence is None else f"{result.confidence:.2f}"
     lines = (
         "Camera: Active",
         f"Hand: {hand}",
         f"Handedness: {handedness}",
+        f"Preferred hand: {dominant_hand}",
         f"Confidence: {confidence}",
         f"Processed FPS: {fps:.1f}",
         "Control: DRY RUN (no OS mouse events)",
@@ -112,6 +144,21 @@ def draw_overlay(
             "N/A" if click_update is None
             else f"{click_update.right.state.value} ({click_update.right.ratio:.3f})"
         ),
+        "Fist: " + (
+            "N/A" if fist_update is None
+            else f"{fist_update.state.value} "
+            f"(max extension {fist_update.maximum_extension_ratio:.3f})"
+        ),
+        "Drag: " + (
+            "N/A" if drag_update is None else drag_update.state.value
+        ),
+        f"Dry-run drags: start {dry_run_drag_starts} / end {dry_run_drag_ends}",
+        "Zoom: " + (
+            "N/A" if zoom_update is None
+            else f"{zoom_update.state.value} ({zoom_update.span_ratio:.3f})"
+        ),
+        "Dry-run zoom steps: "
+        f"in {dry_run_zoom_in_steps} / out {dry_run_zoom_out_steps}",
         f"Dry-run left clicks: {dry_run_left_clicks}",
         f"Dry-run double clicks: {dry_run_double_clicks}",
         f"Dry-run right clicks: {dry_run_right_clicks}",
@@ -125,12 +172,21 @@ def draw_overlay(
         "Horizontal scroll steps: "
         f"left {dry_run_scroll_left_steps} / right {dry_run_scroll_right_steps}",
         f"Last scroll: {last_scroll_direction}",
+        "Calibration: " + (
+            "N/A"
+            if calibration_status is None
+            else f"{calibration_status.state.value} "
+            f"({calibration_status.sample_count}) {calibration_status.message}"
+        ),
+        "Calibration persistence: "
+        + ("selected profile" if calibration_persistence_enabled else "session only"),
+        "Calibration keys: C start / Enter apply / X cancel",
         "Press Q or Esc to quit",
     )
     for index, text in enumerate(lines):
-        y = 24 + index * 21
-        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.50,
+        y = 17 + index * 15
+        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.39,
                     (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.50,
+        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.39,
                     (255, 255, 255), 1, cv2.LINE_AA)
     return frame

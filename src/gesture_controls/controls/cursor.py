@@ -90,21 +90,44 @@ class CursorPipeline:
         region: CursorRegion,
         smoothing_time_constant_seconds: float,
         minimum_movement: float,
+        sensitivity: float = 1.0,
     ) -> None:
         if not 0.0 <= minimum_movement <= 1.0:
             raise ValueError("minimum_movement must be between 0.0 and 1.0")
+        if sensitivity <= 0.0:
+            raise ValueError("sensitivity must be greater than zero")
         self._region = region
         self._smoother = ExponentialSmoother(smoothing_time_constant_seconds)
         self._minimum_movement = minimum_movement
+        self._sensitivity = sensitivity
         self._last_output: Point2D | None = None
+
+    @property
+    def output_point(self) -> Point2D | None:
+        return self._last_output
 
     def update(
         self,
         camera_point: Point2D,
         timestamp_seconds: float,
         freeze: bool = False,
+        minimum_movement_override: float | None = None,
+        mapped_point_override: Point2D | None = None,
     ) -> CursorUpdate:
-        mapped = map_to_normalized_screen(camera_point, self._region)
+        if minimum_movement_override is not None and not (
+            0.0 <= minimum_movement_override <= 1.0
+        ):
+            raise ValueError("minimum movement override must be between 0.0 and 1.0")
+        mapped = (
+            self._apply_sensitivity(
+                map_to_normalized_screen(camera_point, self._region)
+            )
+            if mapped_point_override is None
+            else Point2D(
+                _clamp_unit(mapped_point_override.x),
+                _clamp_unit(mapped_point_override.y),
+            )
+        )
         if freeze:
             if self._last_output is None:
                 self._last_output = mapped
@@ -118,9 +141,14 @@ class CursorPipeline:
                 True,
             )
         smoothed = self._smoother.update(mapped, timestamp_seconds)
+        minimum_movement = (
+            self._minimum_movement
+            if minimum_movement_override is None
+            else minimum_movement_override
+        )
         moved = (
             self._last_output is None
-            or smoothed.distance_to(self._last_output) >= self._minimum_movement
+            or smoothed.distance_to(self._last_output) >= minimum_movement
         )
         if moved:
             self._last_output = smoothed
@@ -133,6 +161,50 @@ class CursorPipeline:
         if self._last_output is not None:
             self._smoother.update(self._last_output, timestamp_seconds)
 
+    def _apply_sensitivity(self, point: Point2D) -> Point2D:
+        return Point2D(
+            _clamp_unit(0.5 + (point.x - 0.5) * self._sensitivity),
+            _clamp_unit(0.5 + (point.y - 0.5) * self._sensitivity),
+        )
+
     def reset(self) -> None:
         self._smoother.reset()
         self._last_output = None
+
+
+class RelativeDragMapper:
+    """Map palm translation relative to the cursor position at drag start."""
+
+    def __init__(self, region: CursorRegion, sensitivity: float = 1.0) -> None:
+        if sensitivity <= 0.0:
+            raise ValueError("sensitivity must be greater than zero")
+        self._region = region
+        self._sensitivity = sensitivity
+        self._camera_origin: Point2D | None = None
+        self._cursor_origin: Point2D | None = None
+
+    def start(self, camera_anchor: Point2D, cursor_origin: Point2D) -> None:
+        self._camera_origin = camera_anchor
+        self._cursor_origin = cursor_origin
+
+    def update(self, camera_anchor: Point2D) -> Point2D:
+        if self._camera_origin is None or self._cursor_origin is None:
+            raise RuntimeError("relative drag mapper must be started before update")
+        return Point2D(
+            _clamp_unit(
+                self._cursor_origin.x
+                + (camera_anchor.x - self._camera_origin.x)
+                / (self._region.right - self._region.left)
+                * self._sensitivity
+            ),
+            _clamp_unit(
+                self._cursor_origin.y
+                + (camera_anchor.y - self._camera_origin.y)
+                / (self._region.bottom - self._region.top)
+                * self._sensitivity
+            ),
+        )
+
+    def reset(self) -> None:
+        self._camera_origin = None
+        self._cursor_origin = None

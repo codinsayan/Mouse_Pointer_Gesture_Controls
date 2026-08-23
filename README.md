@@ -1,10 +1,10 @@
 # Gesture Controls
 
 Gesture Controls is a Windows-first, local webcam hand-landmark prototype. The
-current code includes **Iterations 1 through 5**: it displays a mirrored camera
-preview, one detected hand, a smoothed dry-run cursor target, and a temporally
+current code includes **Iterations 1 through 7**: it displays a mirrored camera
+preview, one detected hand, a smoothed dry-run cursor target, and temporally
 validated gesture state. It cannot move, click, or scroll the operating-system
-pointer, drag, or generate keyboard events.
+pointer or generate click, drag, scroll, or keyboard events at OS level.
 
 Camera frames remain in memory only. The application contains no recording,
 frame-writing, upload, or OS-input code and runs visibly in the foreground.
@@ -92,6 +92,67 @@ Scrolling suppresses click recognition and freezes the cursor until release. Pro
 extension activation/release `0.18/0.10`, folded activation/release `0.10/0.18`,
 activation/release holds `0.06/0.05 s`, one step per `0.08` hand-size units, and
 at most three steps per frame. These values require webcam calibration.
+
+Iteration 6 maps a closed fist held for an additional `0.25 s` to a dry-run drag.
+All four non-thumb fingers must be folded; the thumb position is ignored. The
+cursor freezes while the fist is validated, then relative palm movement drives
+the target from its pre-drag position with a finer `0.0005` movement threshold.
+Opening the fist ends the drag once. Tracking loss, conflict, reset, exception,
+and shutdown also force one safe end transition. Current conflict priority is
+scroll, fist drag, thumb+little right click, thumb+middle double click, then
+thumb+index left click. All thresholds are provisional; no real mouse-down or
+mouse-up is sent in this iteration.
+
+For dry-run zoom, keep index, middle, and little open, bring thumb and ring within
+the activation span, and hold briefly; the ring is free to bend naturally.
+Spread thumb and ring to produce zoom-in steps; contract them to produce zoom-out
+steps. Moving beyond the release span exits zoom. Provisional defaults are span
+activation/release `0.45/0.85`, 60/50 ms pose entry/release, one step per `0.08`
+normalized span change, and at most three steps per frame. Zoom suppresses clicks
+and cursor movement while claimed. It does not emit `Ctrl`, wheel, or other OS
+events in this iteration.
+
+## Local settings profiles
+
+Create a complete validated profile without opening the camera:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.main --write-default-config settings.json
+```
+
+Edit `settings.json`, then run with it:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json
+```
+
+The profile is schema-versioned. Unknown fields, wrong JSON types, invalid
+threshold ordering, and invalid regions produce readable errors. `dominant_hand`
+accepts `"any"`, `"left"`, or `"right"` and refers to MediaPipe's reported label.
+`cursor_sensitivity` accepts `0.1..3.0`; higher values amplify movement around
+screen center. Existing smoothing and gesture thresholds are also settings.
+
+`--camera` and `--model` override profile values for one run and are not written
+back by calibration:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json --camera 1
+```
+
+## Cursor calibration
+
+In the preview:
+
+1. Press `C` to start calibration.
+2. Move the index fingertip around the full comfortable control area for at
+   least 60 processed frames, covering both width and height.
+3. Press `Enter` to validate and apply, or `X` to cancel.
+
+Normal gestures are suspended while collecting. Calibration retains normalized
+index-tip coordinates only and never frames. It uses robust 5th/95th percentiles,
+coverage validation, and bounded padding. With `--config`, a successful apply
+atomically updates that profile. Without a profile, calibration lasts only for
+the current session.
 
 ## Test
 

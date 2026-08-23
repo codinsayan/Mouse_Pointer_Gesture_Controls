@@ -7,6 +7,7 @@ from gesture_controls.controls import (
     CursorRegion,
     ExponentialSmoother,
     Point2D,
+    RelativeDragMapper,
     map_to_normalized_screen,
 )
 
@@ -94,3 +95,65 @@ def test_resume_reseeds_smoothing_from_frozen_output() -> None:
     assert resumed.output_point == before.output_point
     later = pipeline.update(Point2D(0.75, 0.75), 0.3)
     assert before.output_point.x < later.output_point.x < 0.75
+
+
+def test_drag_override_allows_precise_movement_below_normal_threshold() -> None:
+    pipeline = CursorPipeline(CursorRegion(0, 0, 1, 1), 0.01, 0.05)
+    pipeline.update(Point2D(0.5, 0.5), 0.0)
+    precise = pipeline.update(
+        Point2D(0.51, 0.5), 1.0, minimum_movement_override=0.0005
+    )
+    assert precise.moved
+    assert precise.output_point.x == pytest.approx(0.51)
+
+
+@pytest.mark.parametrize("value", [-0.1, 1.1])
+def test_pipeline_rejects_invalid_movement_override(value: float) -> None:
+    pipeline = CursorPipeline(CursorRegion(0, 0, 1, 1), 0.01, 0.0)
+    with pytest.raises(ValueError, match="override"):
+        pipeline.update(Point2D(0.5, 0.5), 0.0, minimum_movement_override=value)
+
+
+def test_relative_drag_mapper_starts_without_jump_and_tracks_palm_delta() -> None:
+    mapper = RelativeDragMapper(CursorRegion(0.1, 0.2, 0.9, 0.8))
+    mapper.start(Point2D(0.4, 0.5), Point2D(0.6, 0.3))
+    assert mapper.update(Point2D(0.4, 0.5)) == Point2D(0.6, 0.3)
+    moved = mapper.update(Point2D(0.48, 0.56))
+    assert moved.x == pytest.approx(0.7)
+    assert moved.y == pytest.approx(0.4)
+
+
+def test_relative_drag_mapper_clamps_and_requires_start() -> None:
+    mapper = RelativeDragMapper(CursorRegion(0, 0, 1, 1))
+    with pytest.raises(RuntimeError, match="started"):
+        mapper.update(Point2D(0.5, 0.5))
+    mapper.start(Point2D(0.5, 0.5), Point2D(0.9, 0.1))
+    assert mapper.update(Point2D(1.0, 0.0)) == Point2D(1.0, 0.0)
+    mapper.reset()
+    with pytest.raises(RuntimeError, match="started"):
+        mapper.update(Point2D(0.5, 0.5))
+
+
+def test_cursor_sensitivity_scales_about_screen_center() -> None:
+    low = CursorPipeline(CursorRegion(0, 0, 1, 1), 0.01, 0.0, sensitivity=0.5)
+    high = CursorPipeline(CursorRegion(0, 0, 1, 1), 0.01, 0.0, sensitivity=2.0)
+    assert low.update(Point2D(0.75, 0.5), 0.0).output_point.x == pytest.approx(0.625)
+    assert high.update(Point2D(0.75, 0.5), 0.0).output_point.x == pytest.approx(1.0)
+
+
+def test_relative_drag_sensitivity_scales_palm_delta() -> None:
+    mapper = RelativeDragMapper(CursorRegion(0, 0, 1, 1), sensitivity=2.0)
+    mapper.start(Point2D(0.5, 0.5), Point2D(0.5, 0.5))
+    moved = mapper.update(Point2D(0.6, 0.4))
+    assert moved.x == pytest.approx(0.7)
+    assert moved.y == pytest.approx(0.3)
+
+
+@pytest.mark.parametrize("factory", [CursorPipeline, RelativeDragMapper])
+def test_cursor_components_reject_nonpositive_sensitivity(factory: object) -> None:
+    if factory is CursorPipeline:
+        with pytest.raises(ValueError, match="sensitivity"):
+            CursorPipeline(CursorRegion(0, 0, 1, 1), 0.1, 0.0, sensitivity=0.0)
+    else:
+        with pytest.raises(ValueError, match="sensitivity"):
+            RelativeDragMapper(CursorRegion(0, 0, 1, 1), sensitivity=0.0)

@@ -12,15 +12,19 @@ transmitted.
 ```text
 main / application loop
   -> config (validated runtime settings)
+  -> config.profile (strict versioned local JSON serialization)
   -> camera.capture (OpenCV ownership and reads)
   -> tracking.hand_landmarker (MediaPipe Tasks VIDEO inference)
   -> tracking.landmarks (framework-neutral landmark data/utilities)
   -> controls.cursor (normalized mapping, smoothing, movement threshold)
+  -> controls.calibration (transient points and robust region bounds)
   -> gestures.features (scale-independent palm and pinch geometry)
   -> gestures.left_pinch (hysteresis, timing, cooldown, transitions)
   -> gestures.clicks (double-click priority and left-click suppression)
   -> gestures.scroll (two-finger pose and two-axis displacement state machine)
-  -> gestures.interactions (scroll/click conflict resolution)
+  -> gestures.fist / drag (held-fist drag intent and lifecycle)
+  -> gestures.zoom (thumb-ring span quantization)
+  -> gestures.interactions (gesture-family conflict resolution)
   -> gestures.cursor_guard (pinch freeze and delayed resume coordination)
   -> ui.overlay (drawing and status presentation)
   -> diagnostics.fps (monotonic processed-FPS measurement)
@@ -69,6 +73,40 @@ quantized into bounded signed dry-run steps on the axis assigned by the pose;
 off-axis movement is ignored. The top-level gesture coordinator evaluates
 scrolling before clicks; every claimed scroll frame resets click state.
 
+Iteration 6 recognizes a fist when the normalized extension of every non-thumb
+finger is below a folded threshold. Pose activation/release use hysteresis and
+temporal validation; an additional 250 ms active hold produces a one-shot
+drag-start transition. Cursor output freezes while the fist is candidate or
+armed. At drag start, a relative mapper anchors the stable palm center to the
+pre-drag cursor position, preventing a closure jump. Palm translation then
+drives the existing smoother with a finer movement threshold. Opening the fist
+or any coordinator reset produces at most one drag-end transition. Conflict
+ownership for drag and existing gestures is extended by the zoom family below.
+
+Iteration 6 also restores thumb-ring distance as a zoom span rather than a drag
+trigger. Zoom requires index, middle, and little extended while the ring remains
+free to articulate, separating it from fist drag, scroll poses, and click
+pinches. After timed pose activation,
+span expansion emits bounded positive dry-run steps and contraction emits bounded
+negative steps. Hysteresis and timed release prevent boundary jitter; no step
+queue is retained. Conflict ownership is now `scroll > fist drag > zoom > right
+> double > left`.
+
+Iteration 7 adds a schema-versioned JSON adapter around `AppConfig`. It rejects
+unknown fields and wrong JSON types before dataclass cross-field validation.
+Writes use a temporary file in the selected directory followed by atomic
+replacement. CLI camera/model overrides are applied to a runtime copy and are
+not persisted by calibration.
+
+Cursor calibration is a foreground-only state in the OpenCV loop. While
+collecting, gesture families are reset and suspended. Only normalized index-tip
+`Point2D` values are retained; frames are not copied or stored. Robust low/high
+quantiles, minimum sample count, minimum two-axis coverage, and bounded padding
+produce a new `CursorRegion`. Applying rebuilds cursor and relative-drag mapping
+immediately. Reported handedness is filtered before gesture or calibration
+processing. Sensitivity scales normal mapping around screen center and relative
+drag displacement.
+
 ## Planned Boundaries
 
 - `camera`: webcam acquisition and camera failures.
@@ -82,8 +120,8 @@ scrolling before clicks; every claimed scroll frame resets click state.
 
 The later mouse controller will be behind an interface, default to disabled/dry
 run, and guarantee release on loss, exceptions, and shutdown. It does not exist
-through Iteration 5; cursor, click, and scroll results are visualized in the
-preview only.
+through Iteration 7; cursor, click, scroll, drag, zoom, settings, and calibration
+results are visualized in the preview only.
 
 ## Data Flow and Privacy
 
