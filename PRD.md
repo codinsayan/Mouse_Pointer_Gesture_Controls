@@ -144,3 +144,16 @@ index-tip coordinates while normal gestures are suspended, apply a robust region
 only after sample/coverage validation, or cancel. Applied calibration updates the
 running cursor immediately and is persisted atomically only when a profile path
 was explicitly selected. No frames or OS input events are stored or generated.
+
+## Iteration 8 Acceptance Criteria
+
+The application provides fake/dry-run and PyAutoGUI mouse-controller adapters
+behind one deterministic safety gate. Every launch starts disabled; real output
+also requires the non-persistent `--enable-real-input` flag and an explicit
+foreground or global enable action. A held open palm pauses control with highest
+gesture priority. Missing, rejected, or below-threshold tracking, emergency
+pause, calibration, controller failure, exception, camera failure, window close,
+and shutdown suppress further output and release an app-held drag button. Hand
+recovery never silently resumes control. Automated tests use fake/injected
+controllers only and never emit operating-system input. Ordinary pointer output
+requires an index-raised hysteresis gate; fist drag retains its relative mapping.

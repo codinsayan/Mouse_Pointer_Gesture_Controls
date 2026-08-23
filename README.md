@@ -1,13 +1,13 @@
 # Gesture Controls
 
 Gesture Controls is a Windows-first, local webcam hand-landmark prototype. The
-current code includes **Iterations 1 through 7**: it displays a mirrored camera
-preview, one detected hand, a smoothed dry-run cursor target, and temporally
-validated gesture state. It cannot move, click, or scroll the operating-system
-pointer or generate click, drag, scroll, or keyboard events at OS level.
+current code includes **Iterations 1 through 8**: it displays a mirrored camera
+preview, tracks one hand, recognizes configured gestures, and provides a
+startup-disabled safety gate around optional local OS input.
 
 Camera frames remain in memory only. The application contains no recording,
-frame-writing, upload, or OS-input code and runs visibly in the foreground.
+frame-writing, upload, telemetry, or remote-inference code and runs visibly in
+the foreground. OS input is dry-run by default and requires two explicit steps.
 
 ## Requirements
 
@@ -61,7 +61,7 @@ Use another camera with `--camera 1`, or another model path with
 window to stop. `Ctrl+C` also performs a clean shutdown from the terminal.
 
 The overlay reports camera state, detection state, handedness, handedness
-confidence, processed FPS, dry-run state, and normalized smoothed cursor
+confidence, processed FPS, safety/controller state, and normalized smoothed cursor
 coordinates. The blue rectangle is the camera active region and the magenta
 cross is the dry-run output target.
 
@@ -101,7 +101,7 @@ Opening the fist ends the drag once. Tracking loss, conflict, reset, exception,
 and shutdown also force one safe end transition. Current conflict priority is
 scroll, fist drag, thumb+little right click, thumb+middle double click, then
 thumb+index left click. All thresholds are provisional; no real mouse-down or
-mouse-up is sent in this iteration.
+mouse-up is sent unless the Iteration 8 real-input procedure below is used.
 
 For dry-run zoom, keep index, middle, and little open, bring thumb and ring within
 the activation span, and hold briefly; the ring is free to bend naturally.
@@ -109,8 +109,46 @@ Spread thumb and ring to produce zoom-in steps; contract them to produce zoom-ou
 steps. Moving beyond the release span exits zoom. Provisional defaults are span
 activation/release `0.45/0.85`, 60/50 ms pose entry/release, one step per `0.08`
 normalized span change, and at most three steps per frame. Zoom suppresses clicks
-and cursor movement while claimed. It does not emit `Ctrl`, wheel, or other OS
-events in this iteration.
+and cursor movement while claimed. In enabled real-input mode, zoom steps become
+local `Ctrl`+`+` or `Ctrl`+`-` operations.
+
+## Safety controls and optional real input
+
+The normal command remains dry-run. Press `E` in the preview or global
+`Ctrl+Alt+G` to enable/disable gesture processing without generating real input:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json
+```
+
+Real mouse and zoom output requires the non-persistent flag below. The application
+still starts **disabled**; show an accepted, sufficiently confident hand, then
+press `E` in the preview or global `Ctrl+Alt+G`:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json --enable-real-input
+```
+
+Safety controls:
+
+- `E`: foreground toggle between enabled and disabled.
+- `Ctrl+Alt+G`: global toggle, even when another window has focus.
+- `P`: foreground emergency pause.
+- `Ctrl+Alt+Shift+G`: global emergency pause.
+- Hold all four non-thumb fingers open for about 350 ms: open-palm pause.
+- Move PyAutoGUI's cursor to a screen corner: PyAutoGUI failsafe; the application
+  catches the output failure, pauses, and attempts to release app-owned input.
+
+Tracking loss, wrong dominant hand, missing/below-threshold confidence,
+calibration, output failure, exception, camera failure, window close, and
+shutdown release an app-held drag and block further events. Tracking recovery
+does not resume automatically; explicitly enable again. The default runtime
+threshold is `minimum_runtime_hand_confidence: 0.5`. MediaPipe Tasks exposes the
+handedness category score here, not a distinct per-frame tracking score.
+
+Ordinary pointer movement requires the index finger to be raised. Its
+`0.18/0.10` activation/release hysteresis has no time hold, preserving pointer
+responsiveness. Fist drag uses its relative palm mapping instead.
 
 ## Local settings profiles
 
@@ -175,6 +213,13 @@ There is no build command yet. PyInstaller packaging belongs to Iteration 12.
 - **Camera stops:** reconnect it and restart the foreground application.
 - **Tracker initialization fails:** confirm Python 3.12, reinstall the pinned
   requirements, and replace a possibly incomplete model download.
+- **Control will not enable:** keep the configured dominant hand visible and
+  check the overlay's confidence and safety reason.
+- **Global hotkey registration fails:** close the application already using
+  `Ctrl+Alt+G`, then restart Gesture Controls. Real input is not started without
+  both safety hotkeys.
+- **Tracking recovered but control remains paused:** this is intentional; press
+  `E` or `Ctrl+Alt+G` to re-enable explicitly.
 
 Project status and actual verification results are maintained in
 [`docs/IMPLEMENTATION_DETAILS.md`](docs/IMPLEMENTATION_DETAILS.md).

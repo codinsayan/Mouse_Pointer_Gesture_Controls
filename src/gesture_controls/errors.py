@@ -23,3 +23,11 @@ class TrackerInitializationError(GestureControlsError):
 
 class ConfigurationError(GestureControlsError):
     """Raised when a local settings profile cannot be loaded or saved safely."""
+
+
+class InputControllerError(GestureControlsError):
+    """Raised when the opt-in operating-system input adapter cannot initialize."""
+
+
+class HotkeyRegistrationError(GestureControlsError):
+    """Raised when mandatory Windows safety hotkeys cannot be registered."""

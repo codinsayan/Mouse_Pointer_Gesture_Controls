@@ -16,6 +16,7 @@ class AppConfig:
     detection_confidence: float = 0.5
     presence_confidence: float = 0.5
     tracking_confidence: float = 0.5
+    minimum_runtime_hand_confidence: float = 0.5
     dominant_hand: str = "any"
     cursor_region_left: float = 0.12
     cursor_region_top: float = 0.10
@@ -24,6 +25,8 @@ class AppConfig:
     cursor_smoothing_seconds: float = 0.08
     cursor_sensitivity: float = 1.0
     cursor_minimum_movement: float = 0.002
+    pointer_extension_activation_ratio: float = 0.18
+    pointer_extension_release_ratio: float = 0.10
     calibration_min_samples: int = 60
     calibration_low_quantile: float = 0.05
     calibration_high_quantile: float = 0.95
@@ -50,6 +53,10 @@ class AppConfig:
     fist_release_hold_seconds: float = 0.05
     drag_activation_hold_seconds: float = 0.25
     drag_cursor_minimum_movement: float = 0.0005
+    pause_extension_activation_ratio: float = 0.18
+    pause_extension_release_ratio: float = 0.10
+    pause_activation_hold_seconds: float = 0.35
+    pause_release_hold_seconds: float = 0.05
     zoom_span_activation_ratio: float = 0.45
     zoom_span_release_ratio: float = 0.85
     zoom_other_fingers_extension_activation_ratio: float = 0.12
@@ -67,7 +74,7 @@ class AppConfig:
     scroll_step_distance_ratio: float = 0.08
     scroll_max_steps_per_frame: int = 3
     post_click_cursor_resume_delay_seconds: float = 0.0
-    window_title: str = "Gesture Controls - Iteration 7 (Dry Run)"
+    window_title: str = "Gesture Controls - Iteration 8"
 
     def __post_init__(self) -> None:
         if self.camera_index < 0:
@@ -79,6 +86,7 @@ class AppConfig:
             "detection_confidence",
             "presence_confidence",
             "tracking_confidence",
+            "minimum_runtime_hand_confidence",
         ):
             value = getattr(self, name)
             if not 0.0 <= value <= 1.0:
@@ -97,6 +105,14 @@ class AppConfig:
             raise ValueError("cursor_sensitivity must be between 0.1 and 3.0")
         if not 0.0 <= self.cursor_minimum_movement <= 1.0:
             raise ValueError("cursor_minimum_movement must be between 0.0 and 1.0")
+        if not (
+            0.0
+            <= self.pointer_extension_release_ratio
+            < self.pointer_extension_activation_ratio
+        ):
+            raise ValueError(
+                "pointer extension ratios must satisfy 0 <= release < activation"
+            )
         if (
             not isinstance(self.calibration_min_samples, int)
             or isinstance(self.calibration_min_samples, bool)
@@ -136,6 +152,14 @@ class AppConfig:
             )
         if not 0.0 <= self.drag_cursor_minimum_movement <= 1.0:
             raise ValueError("drag_cursor_minimum_movement must be between 0.0 and 1.0")
+        if not (
+            0.0
+            <= self.pause_extension_release_ratio
+            < self.pause_extension_activation_ratio
+        ):
+            raise ValueError(
+                "pause extension ratios must satisfy 0 <= release < activation"
+            )
         if not 0.0 < self.zoom_span_activation_ratio < self.zoom_span_release_ratio:
             raise ValueError("zoom span ratios must satisfy 0 < activation < release")
         if not (
@@ -192,6 +216,8 @@ class AppConfig:
             "fist_activation_hold_seconds",
             "fist_release_hold_seconds",
             "drag_activation_hold_seconds",
+            "pause_activation_hold_seconds",
+            "pause_release_hold_seconds",
             "zoom_activation_hold_seconds",
             "zoom_release_hold_seconds",
             "scroll_activation_hold_seconds",

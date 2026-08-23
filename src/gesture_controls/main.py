@@ -35,6 +35,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="write a validated default JSON profile and exit",
     )
+    parser.add_argument(
+        "--enable-real-input",
+        action="store_true",
+        help=(
+            "allow the PyAutoGUI controller for this run; control still starts "
+            "disabled and requires an explicit enable shortcut"
+        ),
+    )
     return parser
 
 
@@ -66,6 +74,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             resolve_config(args, profile_config),
             profile_path=args.config,
             profile_config=profile_config,
+            real_input_requested=args.enable_real_input,
         )
     except GestureControlsError as exc:
         logging.error("%s", exc)

@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from gesture_controls.controls import CalibrationStatus, CursorRegion, CursorUpdate
+from gesture_controls.controls import (
+    CalibrationStatus,
+    ControlStatus,
+    CursorRegion,
+    CursorUpdate,
+)
 from gesture_controls.gestures import (
     ClickGestureUpdate,
     DragState,
     DragUpdate,
     FistUpdate,
     PinchState,
+    PauseUpdate,
+    PointerPoseUpdate,
     ScrollUpdate,
     ZoomState,
     ZoomUpdate,
@@ -61,6 +68,10 @@ def draw_overlay(
     hand_accepted: bool = True,
     calibration_status: CalibrationStatus | None = None,
     calibration_persistence_enabled: bool = False,
+    control_status: ControlStatus | None = None,
+    global_hotkeys_available: bool = False,
+    pause_update: PauseUpdate | None = None,
+    pointer_pose_update: PointerPoseUpdate | None = None,
 ) -> Any:
     import cv2
 
@@ -123,7 +134,16 @@ def draw_overlay(
         f"Preferred hand: {dominant_hand}",
         f"Confidence: {confidence}",
         f"Processed FPS: {fps:.1f}",
-        "Control: DRY RUN (no OS mouse events)",
+        "Control: " + (
+            "N/A"
+            if control_status is None
+            else f"{control_status.state.value.upper()} / "
+            f"{control_status.controller_name}"
+            + (" (REAL OS INPUT)" if control_status.real_output else " (DRY RUN)")
+        ),
+        "Safety: " + (
+            "N/A" if control_status is None else control_status.reason
+        ),
         "Cursor target: " + (
             "N/A" if cursor_update is None
             else f"{cursor_update.output_point.x:.3f}, {cursor_update.output_point.y:.3f}"
@@ -144,24 +164,35 @@ def draw_overlay(
             "N/A" if click_update is None
             else f"{click_update.right.state.value} ({click_update.right.ratio:.3f})"
         ),
+        "Pointer pose: " + (
+            "N/A"
+            if pointer_pose_update is None
+            else ("index raised" if pointer_pose_update.active else "index folded")
+        ),
         "Fist: " + (
             "N/A" if fist_update is None
             else f"{fist_update.state.value} "
             f"(max extension {fist_update.maximum_extension_ratio:.3f})"
         ),
+        "Open-palm pause: " + (
+            "N/A"
+            if pause_update is None
+            else f"{pause_update.state.value} "
+            f"(min extension {pause_update.minimum_extension_ratio:.3f})"
+        ),
         "Drag: " + (
             "N/A" if drag_update is None else drag_update.state.value
         ),
-        f"Dry-run drags: start {dry_run_drag_starts} / end {dry_run_drag_ends}",
+        f"Gesture drags: start {dry_run_drag_starts} / end {dry_run_drag_ends}",
         "Zoom: " + (
             "N/A" if zoom_update is None
             else f"{zoom_update.state.value} ({zoom_update.span_ratio:.3f})"
         ),
-        "Dry-run zoom steps: "
+        "Gesture zoom steps: "
         f"in {dry_run_zoom_in_steps} / out {dry_run_zoom_out_steps}",
-        f"Dry-run left clicks: {dry_run_left_clicks}",
-        f"Dry-run double clicks: {dry_run_double_clicks}",
-        f"Dry-run right clicks: {dry_run_right_clicks}",
+        f"Gesture left clicks: {dry_run_left_clicks}",
+        f"Gesture double clicks: {dry_run_double_clicks}",
+        f"Gesture right clicks: {dry_run_right_clicks}",
         f"Last click: {last_click_kind}",
         "Scroll: " + (
             "N/A" if scroll_update is None
@@ -178,15 +209,19 @@ def draw_overlay(
             else f"{calibration_status.state.value} "
             f"({calibration_status.sample_count}) {calibration_status.message}"
         ),
-        "Calibration persistence: "
-        + ("selected profile" if calibration_persistence_enabled else "session only"),
-        "Calibration keys: C start / Enter apply / X cancel",
-        "Press Q or Esc to quit",
+        "Calibration: "
+        + ("profile" if calibration_persistence_enabled else "session")
+        + " / C start / Enter apply / X cancel",
+        "Control keys: E toggle / P EMERGENCY / Q or Esc quit",
+        "Global keys: " + (
+            "Ctrl+Alt+G toggle / Ctrl+Alt+Shift+G EMERGENCY"
+            if global_hotkeys_available else "unavailable"
+        ),
     )
     for index, text in enumerate(lines):
-        y = 17 + index * 15
-        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.39,
+        y = 15 + index * 14
+        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.36,
                     (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.39,
+        cv2.putText(frame, text, (12, y), cv2.FONT_HERSHEY_SIMPLEX, 0.36,
                     (255, 255, 255), 1, cv2.LINE_AA)
     return frame

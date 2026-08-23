@@ -16,12 +16,15 @@ thumb–little features, temporal pinch recognizers, click-priority coordination
 and cursor guarding.
 Iteration 5 adds normalized finger extension/palm motion, a two-finger scroll
 state machine, and scroll-first gesture-family conflict resolution. Cursor,
-click, and scroll output remain dry-run. Iteration 6 adds a scale-independent
+click, and scroll output were dry-run through that iteration. Iteration 6 adds a scale-independent
 fist pose, a separate armed/dragging state machine, relative palm-motion cursor
 tracking, one-shot release safety, and bounded thumb-ring expansion/contraction
-zoom. There is no OS-input dependency or behavior. Iteration 7 adds strict local
+zoom. Those results remained preview-only through Iteration 6. Iteration 7 adds strict local
 JSON profiles, reported-hand filtering, cursor sensitivity, and transient
-landmark-only cursor calibration with optional explicit persistence.
+landmark-only cursor calibration with optional explicit persistence. Iteration 8
+adds a startup-disabled safety state machine, dry-run/fake/PyAutoGUI controller
+boundary, global and foreground emergency controls, open-palm pause, tracking-
+loss latching, and guaranteed best-effort release of app-owned inputs.
 
 ## Iterations
 
@@ -34,7 +37,7 @@ landmark-only cursor calibration with optional explicit persistence.
 | 05 | Scrolling | Complete | Exclusive scale-independent two-axis dry-run scrolling | [Iteration 05](iterations/ITERATION_05_SCROLLING.md) |
 | 06 | Dragging and state-machine hardening | Complete | Held-fist drag plus bounded thumb-ring dry-run zoom | [Iteration 06](iterations/ITERATION_06_DRAGGING.md) |
 | 07 | Calibration and settings | Complete | Validated local profiles and robust interactive cursor calibration | [Iteration 07](iterations/ITERATION_07_CALIBRATION_AND_SETTINGS.md) |
-| 08 | Safety and tracking-loss recovery | Not started | Awaiting approval | — |
+| 08 | Safety and tracking-loss recovery | Complete | Startup-disabled OS-input gate, emergency pause, and fail-safe release | [Iteration 08](iterations/ITERATION_08_SAFETY_AND_TRACKING_LOSS.md) |
 | 09 | UI and system tray | Not started | Awaiting approval | — |
 | 10 | Automated and real-world testing | Not started | Awaiting approval | — |
 | 11 | Performance optimization | Not started | Awaiting approval | — |
@@ -45,20 +48,25 @@ landmark-only cursor calibration with optional explicit persistence.
 - Repository foundation: complete.
 - Webcam preview and one-hand landmarks: implemented; tracker initialization
   verified, interactive webcam visualization awaiting a local manual check.
-- Cursor mapping and smoothing: complete; dry-run preview only.
-- Left/double-click recognition: complete; dry-run only.
-- Thumb–little right-click recognition: complete; dry-run only.
-- Two-finger vertical and horizontal scrolling: complete; dry-run only.
-- Held-fist dragging: complete; precise dry-run target and transition
-  counters only.
-- Thumb-ring expansion/contraction zoom: complete; bounded dry-run steps only.
+- Cursor mapping and smoothing: complete; optional gated OS movement in Iteration 8.
+- Left/double-click recognition: complete; optional gated OS output.
+- Thumb–little right-click recognition: complete; optional gated OS output.
+- Two-finger vertical and horizontal scrolling: complete; optional gated OS output.
+- Held-fist dragging: complete; precise relative target and optional gated
+  left-button hold/release.
+- Thumb-ring expansion/contraction zoom: complete; bounded optional gated
+  Ctrl-plus/minus output.
 - Versioned local settings profiles: complete; strict validation and atomic
   explicit writes.
 - Reported hand preference and cursor sensitivity: complete; webcam behavior
   still needs representative manual checks.
 - Cursor-region calibration: complete; session apply and optional selected-profile
   persistence using transient normalized coordinates only.
-- Operating-system mouse events: intentionally absent; gesture actions remain dry-run only.
+- Safety controls and tracking-loss recovery: implemented; every run starts
+  disabled, recovery requires explicit re-enable, and held drag input is released.
+- Operating-system input: dry-run by default; PyAutoGUI output requires the
+  non-persistent `--enable-real-input` flag plus an explicit runtime enable.
+- Open-palm pause: implemented with highest gesture priority and a 350 ms hold.
 - Packaging: deferred to Iteration 12.
 
 ## Important Technical Decisions
@@ -130,11 +138,31 @@ landmark-only cursor calibration with optional explicit persistence.
 - Calibration retains only normalized index-tip points. Defaults require 60
   samples, 5th/95th percentile bounds, at least `0.25` span on both axes, and 5%
   padding. Normal gesture processing is suspended during collection.
+- OS output is routed through `MouseController`; tests use a recording fake.
+  PyAutoGUI is imported only for explicit real-input runs and converts normalized
+  coordinates to clamped primary-screen pixels.
+- Every launch starts disabled, independent of profiles. Real output requires
+  `--enable-real-input`, followed by `E` or global `Ctrl+Alt+G` while tracking is
+  valid. `P` and global `Ctrl+Alt+Shift+G` emergency-pause control.
+- Tracking loss and below-threshold handedness confidence latch control off and
+  require explicit re-enable. Calibration and all shutdown/error paths also
+  release app-owned input.
+- The open-palm recognizer requires all four non-thumb fingers extended, applies
+  `0.18/0.10` activation/release hysteresis and a 350 ms hold, and has the highest
+  gesture-family priority.
+- Ordinary pointer movement requires an index extension ratio of `0.18` to enter
+  and remains active through `0.10`; there is no activation time hold. Fist drag
+  bypasses this gate and continues to use relative palm movement.
+- PyAutoGUI's normal corner failsafe remains enabled. Only app-owned release calls
+  temporarily bypass it so a failsafe-triggered drag can still be released.
 
 ## Known Bugs
 
-No unresolved application bugs. Resolved setup/test issues are in the Iteration
-1 document.
+- Iteration 8 open-palm enable collision: enabling while all four fingers remain
+  extended causes the open-palm pause gesture to disable control after its 350 ms
+  hold. A release-to-arm guard is proposed but not yet implemented. See the
+  Iteration 8 document.
+- Resolved setup/test issues are recorded in their iteration documents.
 
 ## Pending Risks
 
@@ -159,6 +187,13 @@ No unresolved application bugs. Resolved setup/test issues are in the Iteration
   representative webcam usability testing.
 - Mirrored-feed handedness labels and interactive calibration ergonomics require
   a live webcam check. Incorrect preferred-hand selection safely ignores tracking.
+- MediaPipe Tasks exposes a handedness category score in the current result, not
+  a separate per-frame tracking score. Iteration 8 uses that available score for
+  its configurable runtime confidence gate; representative false-pause behavior
+  needs live testing.
+- Real PyAutoGUI movement, multi-monitor behavior, horizontal wheel direction,
+  application-specific zoom shortcuts, global-hotkey conflicts, and end-to-end
+  emergency-release behavior require controlled manual Windows testing.
 - The current MediaPipe privacy notice describes SDK utilization metrics for new
   releases. The selected pre-change 0.10.21 pin reduces this risk, but a network
   audit has not independently proven that version emits no traffic.
@@ -174,6 +209,7 @@ Invoke-WebRequest -Uri "https://storage.googleapis.com/mediapipe-models/hand_lan
 .\.venv\Scripts\python.exe -m gesture_controls.main
 .\.venv\Scripts\python.exe -m gesture_controls.main --write-default-config settings.json
 .\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json
+.\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json --enable-real-input
 ```
 
 ## Test and Build Commands

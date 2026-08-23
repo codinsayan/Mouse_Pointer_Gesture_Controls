@@ -111,3 +111,9 @@ def test_write_default_config_command_does_not_start_camera(
     assert main(["--write-default-config", str(path)]) == 0
     assert load_config(path) == AppConfig()
     assert config_to_profile(AppConfig())["schema_version"] == PROFILE_SCHEMA_VERSION
+
+
+def test_real_input_cli_flag_is_explicit_and_not_a_profile_setting() -> None:
+    assert not build_parser().parse_args([]).enable_real_input
+    assert build_parser().parse_args(["--enable-real-input"]).enable_real_input
+    assert "enable_real_input" not in config_to_profile(AppConfig())["settings"]

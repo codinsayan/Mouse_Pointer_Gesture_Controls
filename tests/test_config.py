@@ -8,11 +8,20 @@ from gesture_controls.config import AppConfig
 def test_default_configuration_is_safe_and_expected() -> None:
     config = AppConfig()
     assert config.camera_index == 0
+    assert config.minimum_runtime_hand_confidence == 0.5
     assert (config.frame_width, config.frame_height, config.target_fps) == (640, 480, 30)
     assert config.model_path == Path("assets/models/hand_landmarker.task")
 
 
-@pytest.mark.parametrize("field", ["detection_confidence", "presence_confidence", "tracking_confidence"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "detection_confidence",
+        "presence_confidence",
+        "tracking_confidence",
+        "minimum_runtime_hand_confidence",
+    ],
+)
 def test_rejects_invalid_confidence(field: str) -> None:
     with pytest.raises(ValueError, match=field):
         AppConfig(**{field: 1.01})
@@ -58,6 +67,24 @@ def test_rejects_invalid_calibration_settings() -> None:
 def test_rejects_invalid_minimum_movement() -> None:
     with pytest.raises(ValueError, match="minimum_movement"):
         AppConfig(cursor_minimum_movement=-0.1)
+
+
+def test_rejects_invalid_pause_settings() -> None:
+    with pytest.raises(ValueError, match="pause extension"):
+        AppConfig(
+            pause_extension_activation_ratio=0.10,
+            pause_extension_release_ratio=0.10,
+        )
+    with pytest.raises(ValueError, match="pause_activation_hold_seconds"):
+        AppConfig(pause_activation_hold_seconds=-0.1)
+
+
+def test_rejects_invalid_pointer_pose_settings() -> None:
+    with pytest.raises(ValueError, match="pointer extension"):
+        AppConfig(
+            pointer_extension_activation_ratio=0.10,
+            pointer_extension_release_ratio=0.10,
+        )
 
 
 def test_rejects_invalid_left_pinch_hysteresis() -> None:

@@ -9,7 +9,8 @@ from .clicks import ClickAction, ClickGestureCoordinator, ClickGestureUpdate
 from .drag import DragAction, DragRecognizer, DragState, DragUpdate
 from .features import PinchFeatures
 from .fist import FistRecognizer, FistState, FistUpdate
-from .scroll import ScrollRecognizer, ScrollUpdate
+from .pause import OpenPalmPauseRecognizer, PauseState, PauseTransition, PauseUpdate
+from .scroll import ScrollRecognizer, ScrollState, ScrollUpdate
 from .zoom import ZoomRecognizer, ZoomState, ZoomUpdate
 
 
@@ -20,6 +21,7 @@ class GestureAction(str, Enum):
     RIGHT_CLICK = "right_click"
     DRAG_STARTED = "drag_started"
     DRAG_ENDED = "drag_ended"
+    PAUSE_REQUESTED = "pause_requested"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,9 +32,12 @@ class InteractionUpdate:
     fist: FistUpdate
     zoom: ZoomUpdate
     action: GestureAction = GestureAction.NONE
+    pause: PauseUpdate = PauseUpdate(PauseState.INACTIVE)
 
     @property
     def cursor_should_freeze(self) -> bool:
+        if self.pause.claims_frame:
+            return True
         if self.scroll.claims_frame:
             return True
         if self.drag.state is DragState.DRAGGING:
@@ -54,12 +59,14 @@ class GestureCoordinator:
         fist: FistRecognizer,
         drag: DragRecognizer,
         zoom: ZoomRecognizer,
+        pause: OpenPalmPauseRecognizer | None = None,
     ) -> None:
         self._scroll = scroll
         self._clicks = clicks
         self._fist = fist
         self._drag = drag
         self._zoom = zoom
+        self._pause = pause
 
     @staticmethod
     def _drag_action(action: DragAction) -> GestureAction:
@@ -72,6 +79,31 @@ class GestureCoordinator:
     def update(
         self, features: PinchFeatures, timestamp_seconds: float
     ) -> InteractionUpdate:
+        pause = (
+            self._pause.update(features, timestamp_seconds)
+            if self._pause is not None
+            else PauseUpdate(PauseState.INACTIVE)
+        )
+        if pause.claims_frame:
+            self._scroll.reset()
+            self._clicks.reset(timestamp_seconds)
+            self._fist.reset()
+            self._zoom.reset()
+            drag = self._drag.reset(timestamp_seconds)
+            action = (
+                GestureAction.PAUSE_REQUESTED
+                if pause.transition is PauseTransition.ACTIVATED
+                else self._drag_action(drag.action)
+            )
+            return InteractionUpdate(
+                ScrollUpdate(ScrollState.INACTIVE),
+                None,
+                drag,
+                FistUpdate(FistState.INACTIVE),
+                ZoomUpdate(ZoomState.INACTIVE),
+                action,
+                pause,
+            )
         scroll = self._scroll.update(features, timestamp_seconds)
         if scroll.claims_frame:
             self._clicks.reset(timestamp_seconds)
@@ -122,6 +154,8 @@ class GestureCoordinator:
         return InteractionUpdate(scroll, click, drag, fist, zoom, action)
 
     def reset(self, timestamp_seconds: float | None = None) -> GestureAction:
+        if self._pause is not None:
+            self._pause.reset()
         self._scroll.reset()
         self._fist.reset()
         self._zoom.reset()

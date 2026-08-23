@@ -18,12 +18,17 @@ main / application loop
   -> tracking.landmarks (framework-neutral landmark data/utilities)
   -> controls.cursor (normalized mapping, smoothing, movement threshold)
   -> controls.calibration (transient points and robust region bounds)
+  -> controls.mouse (dry-run/fake/PyAutoGUI OS-output adapters)
+  -> controls.safety (startup-disabled gating and release ownership)
+  -> controls.hotkeys (Windows RegisterHotKey safety controls)
   -> gestures.features (scale-independent palm and pinch geometry)
   -> gestures.left_pinch (hysteresis, timing, cooldown, transitions)
   -> gestures.clicks (double-click priority and left-click suppression)
   -> gestures.scroll (two-finger pose and two-axis displacement state machine)
   -> gestures.fist / drag (held-fist drag intent and lifecycle)
   -> gestures.zoom (thumb-ring span quantization)
+  -> gestures.pause (held open-palm safety pause)
+  -> gestures.pointer (zero-delay index-raised hysteresis gate)
   -> gestures.interactions (gesture-family conflict resolution)
   -> gestures.cursor_guard (pinch freeze and delayed resume coordination)
   -> ui.overlay (drawing and status presentation)
@@ -107,6 +112,32 @@ immediately. Reported handedness is filtered before gesture or calibration
 processing. Sensitivity scales normal mapping around screen center and relative
 drag displacement.
 
+Iteration 8 adds the OS-output boundary. `MouseController` keeps PyAutoGUI out of
+deterministic recognition and safety logic; ordinary tests use a recording fake.
+Normalized cursor points become clamped primary-screen pixels only inside the
+PyAutoGUI adapter. Click, double-click, right-click, vertical/horizontal wheel,
+left-button drag, and Ctrl-plus/minus zoom output pass through one
+`InputSafetyController`.
+
+The safety controller always begins disabled and cannot persist an enabled
+state. Real output additionally requires a per-launch CLI flag. Foreground keys
+and thread-owned Windows `RegisterHotKey` messages provide toggle and emergency
+pause actions. A held open palm uses scale-independent extension geometry,
+hysteresis, and a 350 ms validation hold before requesting pause; it has priority
+over every other gesture family.
+
+Ordinary pointer motion also passes a zero-delay index-extension hysteresis gate,
+so a visible folded hand cannot move the real cursor. Fist drag bypasses that
+gate and retains its relative palm mapping. This adds no temporal hold to normal
+pointer motion and therefore does not add deliberate recognition latency.
+
+Missing/rejected landmarks or a handedness-category confidence below the runtime
+safety threshold latch `tracking_lost`, release app-owned inputs, and require an
+explicit re-enable after recovery. Calibration, user pause, PyAutoGUI failure,
+camera/tracker exceptions, window close, and shutdown use the same release path.
+PyAutoGUI's corner failsafe remains enabled for normal operations; the release
+path bypasses it only while releasing input owned by this application.
+
 ## Planned Boundaries
 
 - `camera`: webcam acquisition and camera failures.
@@ -118,28 +149,32 @@ drag displacement.
 - `ui`: preview, status, and later tray/settings UI.
 - `diagnostics`: logging and performance measurements.
 
-The later mouse controller will be behind an interface, default to disabled/dry
-run, and guarantee release on loss, exceptions, and shutdown. It does not exist
-through Iteration 7; cursor, click, scroll, drag, zoom, settings, and calibration
-results are visualized in the preview only.
+The mouse controller is behind an interface and defaults to dry-run. Real output
+is opt-in per launch and still starts disabled. System-tray and graphical settings
+ownership remain planned for Iteration 9.
 
 ## Data Flow and Privacy
 
 OpenCV acquires a BGR array. The foreground loop mirrors it, converts it to RGB,
 and passes the in-memory array to MediaPipe. Results are converted to immutable
 landmark values. Cursor calculations consume coordinates only and never retain
-frames. No component has a frame-writing or network interface. Closing the loop
-releases the camera, tracker, and preview window.
+frames. When explicitly enabled, normalized actions cross the safety gate to the
+local PyAutoGUI adapter. No component has a frame-writing, upload, telemetry, or
+remote-inference interface. Closing the loop releases app-owned input, global
+hotkeys, camera, tracker, and preview window.
 
 ## Error Model
 
 Expected setup/runtime failures use specific application exceptions and concise
-messages. The CLI returns a nonzero exit code. Cleanup is performed in `finally`
-blocks/context managers. Unexpected failures are logged without logging frames.
+messages. The CLI returns a nonzero exit code. Output-call failures become an
+emergency-paused state. Cleanup runs in `finally` blocks/context managers,
+including best-effort app-owned input release. Unexpected failures are logged
+without logging frames.
 
 ## Dependency Policy
 
 Python 3.12 is the baseline because current MediaPipe Windows metadata supports
 it and it is installed in the inspected environment. Runtime versions are pinned
-only after installation/import/test compatibility is demonstrated here. PyAutoGUI
-and PyInstaller are intentionally deferred.
+only after installation/import/test compatibility is demonstrated here.
+PyAutoGUI 0.9.54 is verified with Python 3.12.4 for Iteration 8. PyInstaller
+remains deferred.
