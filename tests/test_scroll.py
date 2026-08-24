@@ -14,8 +14,6 @@ from gesture_controls.gestures import (
     ScrollAxis,
     ScrollState,
     ScrollTransition,
-    ZoomRecognizer,
-    ZoomState,
 )
 
 
@@ -31,13 +29,11 @@ def features(
     left: float = 0.8,
     double: float = 0.8,
     right: float = 0.8,
-    zoom: float = 0.8,
 ) -> PinchFeatures:
     return PinchFeatures(
         left,
         double,
         right,
-        zoom,
         hand_size,
         index,
         middle,
@@ -60,7 +56,6 @@ def horizontal_features(
     left: float = 0.8,
     double: float = 0.8,
     right: float = 0.8,
-    zoom: float = 0.8,
 ) -> PinchFeatures:
     return features(
         index=0.05,
@@ -73,7 +68,6 @@ def horizontal_features(
         left=left,
         double=double,
         right=right,
-        zoom=zoom,
     )
 
 
@@ -91,7 +85,6 @@ def interaction_coordinator() -> GestureCoordinator:
         click_coordinator(),
         FistRecognizer(0.10, 0.18, 0.06, 0.05),
         DragRecognizer(0.25),
-        ZoomRecognizer(0.45, 0.85, 0.12, 0.08, 0.06, 0.05, 0.08, 3),
     )
 
 
@@ -147,7 +140,8 @@ def test_vertical_motion_emits_signed_scale_independent_steps() -> None:
     activate(item)
     assert item.update(features(anchor_y=0.43), 0.07).steps == 0
     assert item.update(features(anchor_y=0.41), 0.08).steps == 1
-    assert item.update(features(anchor_y=0.59), 0.09).steps == -2
+    assert item.update(features(anchor_y=0.59), 0.09).steps == 0
+    assert item.update(features(anchor_y=0.50), 0.10).steps == 1
 
     scaled = recognizer()
     activate(scaled)
@@ -161,7 +155,9 @@ def test_horizontal_motion_emits_left_and_right_scale_independent_steps() -> Non
     assert right.horizontal_steps == 1
     assert right.steps == 0
     left = item.update(horizontal_features(anchor_x=0.39), 0.08)
-    assert left.horizontal_steps == -2
+    assert left.horizontal_steps == 0
+    repeated_right = item.update(horizontal_features(anchor_x=0.48), 0.09)
+    assert repeated_right.horizontal_steps == 1
 
     scaled = recognizer()
     activate(scaled, horizontal_features(hand_size=2.0), ScrollAxis.HORIZONTAL)
@@ -190,6 +186,49 @@ def test_large_motion_is_bounded_and_does_not_build_a_step_backlog() -> None:
     moved = features(anchor_y=-1.0)
     assert item.update(moved, 0.07).steps == 2
     assert item.update(moved, 0.08).steps == 0
+
+
+def test_releasing_pose_allows_a_new_scroll_direction() -> None:
+    item = recognizer()
+    activate(item)
+    assert item.update(features(anchor_y=0.41), 0.07).steps == 1
+    assert item.update(features(index=0.0), 0.08).state is ScrollState.RELEASING
+    assert item.update(features(index=0.0), 0.13).state is ScrollState.INACTIVE
+    assert item.update(features(anchor_y=0.41), 0.14).state is ScrollState.CANDIDATE
+    assert item.update(features(anchor_y=0.41), 0.20).state is ScrollState.ACTIVE
+    assert item.update(features(anchor_y=0.50), 0.21).steps == -1
+
+
+def test_output_multiplier_scales_steps_after_quantization() -> None:
+    item = ScrollRecognizer(
+        0.18, 0.10, 0.10, 0.18, 0.06, 0.05, 0.08, 3, True, 3
+    )
+    activate(item)
+    assert item.update(features(anchor_y=0.41), 0.07).steps == 3
+
+
+def test_direction_lock_can_be_disabled_for_legacy_reversible_behavior() -> None:
+    item = ScrollRecognizer(
+        0.18, 0.10, 0.10, 0.18, 0.06, 0.05, 0.08, 3, False, 1
+    )
+    activate(item)
+    assert item.update(features(anchor_y=0.41), 0.07).steps == 1
+    assert item.update(features(anchor_y=0.59), 0.08).steps == -2
+
+
+def test_scroll_recognizer_validates_direction_lock_type() -> None:
+    with pytest.raises(ValueError, match="direction lock"):
+        ScrollRecognizer(
+            0.18, 0.10, 0.10, 0.18, 0.06, 0.05, 0.08, 3, 1  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("multiplier", [0, 21, True])
+def test_scroll_recognizer_validates_output_multiplier(multiplier: int) -> None:
+    with pytest.raises(ValueError, match="output multiplier"):
+        ScrollRecognizer(
+            0.18, 0.10, 0.10, 0.18, 0.06, 0.05, 0.08, 3, True, multiplier
+        )
 
 
 def test_pose_hysteresis_and_release_hold_prevent_jitter() -> None:
@@ -307,35 +346,3 @@ def test_fist_candidate_suppresses_all_click_pinches() -> None:
     update = item.update(fist_with_conflicting_pinches, 0.0)
     assert update.fist.claims_frame
     assert update.click is None
-
-
-def test_zoom_expansion_and_contraction_emit_exclusive_signed_steps() -> None:
-    item = interaction_coordinator()
-    pose = features(index=0.15, middle=0.15, ring=0.05, little=0.15, zoom=0.40)
-    candidate = item.update(pose, 0.0)
-    assert candidate.zoom.state is ZoomState.CANDIDATE
-    assert candidate.click is None
-    active = item.update(pose, 0.06)
-    assert active.zoom.state is ZoomState.ACTIVE
-    zoom_in = item.update(
-        features(index=0.15, middle=0.15, ring=0.05, little=0.15, zoom=0.49),
-        0.07,
-    )
-    assert zoom_in.zoom.steps == 1
-    zoom_out = item.update(pose, 0.08)
-    assert zoom_out.zoom.steps == -1
-
-
-def test_fist_and_scroll_have_priority_over_zoom() -> None:
-    item = interaction_coordinator()
-    fist = item.update(
-        features(index=0.05, middle=0.05, ring=0.05, little=0.05, zoom=0.4),
-        0.0,
-    )
-    assert fist.fist.claims_frame
-    assert fist.zoom.state is ZoomState.INACTIVE
-
-    item.reset(0.01)
-    scroll = item.update(features(zoom=0.4), 0.02)
-    assert scroll.scroll.claims_frame
-    assert scroll.zoom.state is ZoomState.INACTIVE

@@ -31,15 +31,14 @@ from gesture_controls.gestures import (
     FistRecognizer,
     GestureAction,
     GestureCoordinator,
-    OpenPalmPauseRecognizer,
     PinchRecognizer,
     PointerPoseGate,
     ScrollRecognizer,
-    ZoomRecognizer,
     extract_left_pinch_features,
 )
 from gesture_controls.tracking import HandLandmarkerTracker, hand_matches_preference
 from gesture_controls.ui import draw_overlay
+from gesture_controls.ui.runtime import RuntimeBridge, RuntimeCommand, RuntimeSnapshot
 
 
 def _cursor_components(
@@ -67,6 +66,7 @@ def run(
     real_input_requested: bool = False,
     mouse_controller: MouseController | None = None,
     hotkey_source: Any | None = None,
+    runtime_bridge: RuntimeBridge | None = None,
 ) -> None:
     import cv2
 
@@ -97,6 +97,8 @@ def run(
         config.scroll_release_hold_seconds,
         config.scroll_step_distance_ratio,
         config.scroll_max_steps_per_frame,
+        config.scroll_direction_lock_enabled,
+        config.scroll_output_multiplier,
     )
     gestures = GestureCoordinator(
         scroll_gesture,
@@ -130,22 +132,6 @@ def run(
             config.fist_release_hold_seconds,
         ),
         DragRecognizer(config.drag_activation_hold_seconds),
-        ZoomRecognizer(
-            config.zoom_span_activation_ratio,
-            config.zoom_span_release_ratio,
-            config.zoom_other_fingers_extension_activation_ratio,
-            config.zoom_other_fingers_extension_release_ratio,
-            config.zoom_activation_hold_seconds,
-            config.zoom_release_hold_seconds,
-            config.zoom_step_distance_ratio,
-            config.zoom_max_steps_per_frame,
-        ),
-        OpenPalmPauseRecognizer(
-            config.pause_extension_activation_ratio,
-            config.pause_extension_release_ratio,
-            config.pause_activation_hold_seconds,
-            config.pause_release_hold_seconds,
-        ),
     )
     cursor_guard = ClickCursorGuard(config.post_click_cursor_resume_delay_seconds)
     pointer_pose = PointerPoseGate(
@@ -157,8 +143,6 @@ def run(
     dry_run_right_clicks = 0
     dry_run_drag_starts = 0
     dry_run_drag_ends = 0
-    dry_run_zoom_in_steps = 0
-    dry_run_zoom_out_steps = 0
     dry_run_scroll_up_steps = 0
     dry_run_scroll_down_steps = 0
     dry_run_scroll_left_steps = 0
@@ -167,7 +151,6 @@ def run(
     last_scroll_direction = "none"
     scroll_was_claiming = False
     fist_was_claiming = False
-    zoom_was_claiming = False
     last_timestamp_ms = -1
     try:
         with (
@@ -176,6 +159,13 @@ def run(
             CameraCapture(config) as camera,
         ):
             while True:
+                ui_commands = (
+                    runtime_bridge.drain_commands()
+                    if runtime_bridge is not None
+                    else ()
+                )
+                if RuntimeCommand.STOP in ui_commands:
+                    break
                 frame = cv2.flip(camera.read(), 1)
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 timestamp_ms = perf_counter_ns() // 1_000_000
@@ -188,8 +178,6 @@ def run(
                 scroll_update = None
                 drag_update = None
                 fist_update = None
-                zoom_update = None
-                pause_update = None
                 pointer_pose_update = None
                 hand_accepted = len(result.landmarks) >= 21 and hand_matches_preference(
                     result.handedness, config.dominant_hand
@@ -199,18 +187,23 @@ def run(
                     and result.confidence >= config.minimum_runtime_hand_confidence
                 )
                 tracking_ready = hand_accepted and confidence_accepted
+                unavailable_reason = (
+                    "Control enabled: waiting for accepted hand"
+                    if not hand_accepted
+                    else "Control enabled: waiting for stable hand confidence"
+                )
+                safety.set_tracking_available(tracking_ready, unavailable_reason)
                 hotkey_actions = hotkeys.poll()
-                if HotkeyAction.EMERGENCY_PAUSE in hotkey_actions:
-                    safety.emergency_pause("Global emergency pause")
-                elif HotkeyAction.TOGGLE in hotkey_actions:
-                    safety.toggle(tracking_ready)
-                if safety.enabled and not tracking_ready:
-                    reason = (
-                        "Tracking lost: accepted hand unavailable"
-                        if not hand_accepted
-                        else "Tracking lost: confidence below safety threshold"
+                ui_emergency = RuntimeCommand.EMERGENCY_PAUSE in ui_commands
+                ui_toggle = RuntimeCommand.TOGGLE in ui_commands
+                if ui_emergency or HotkeyAction.EMERGENCY_PAUSE in hotkey_actions:
+                    safety.emergency_pause(
+                        "Dashboard emergency pause"
+                        if ui_emergency
+                        else "Global emergency pause"
                     )
-                    safety.tracking_lost(reason)
+                elif ui_toggle or HotkeyAction.TOGGLE in hotkey_actions:
+                    safety.toggle()
                 if tracking_ready and not calibrator.collecting and safety.enabled:
                     index_tip = result.landmarks[8]
                     pinch_features = extract_left_pinch_features(result.landmarks)
@@ -222,8 +215,6 @@ def run(
                     click_update = interaction.click
                     drag_update = interaction.drag
                     fist_update = interaction.fist
-                    zoom_update = interaction.zoom
-                    pause_update = interaction.pause
                     if interaction.action is GestureAction.LEFT_CLICK:
                         dry_run_left_clicks += 1
                         last_click_kind = "left (thumb-index)"
@@ -252,14 +243,6 @@ def run(
                         dry_run_drag_ends += 1
                         drag_motion.reset()
                         safety.end_drag()
-                    elif interaction.action is GestureAction.PAUSE_REQUESTED:
-                        safety.pause("Open-palm pause gesture")
-                        drag_motion.reset()
-                    if zoom_update.steps > 0:
-                        dry_run_zoom_in_steps += zoom_update.steps
-                    elif zoom_update.steps < 0:
-                        dry_run_zoom_out_steps += -zoom_update.steps
-                    safety.zoom(zoom_update.steps)
                     if scroll_update.steps > 0:
                         dry_run_scroll_up_steps += scroll_update.steps
                         last_scroll_direction = "up"
@@ -277,8 +260,6 @@ def run(
                     if (
                         scroll_update.claims_frame
                         or fist_update.claims_frame
-                        or zoom_update.claims_frame
-                        or pause_update.claims_frame
                     ):
                         cursor_guard.reset()
                         freeze_cursor = interaction.cursor_should_freeze
@@ -286,7 +267,6 @@ def run(
                         if (
                             scroll_was_claiming
                             or fist_was_claiming
-                            or zoom_was_claiming
                         ):
                             cursor_pipeline.resume_from_frozen_output(now_seconds)
                         assert click_update is not None
@@ -325,7 +305,6 @@ def run(
                         safety.move_to(cursor_update.output_point)
                     scroll_was_claiming = scroll_update.claims_frame
                     fist_was_claiming = fist_update.claims_frame
-                    zoom_was_claiming = zoom_update.claims_frame
                 elif tracking_ready and calibrator.collecting:
                     index_tip = result.landmarks[8]
                     calibration_point = Point2D(index_tip.x, index_tip.y)
@@ -336,7 +315,6 @@ def run(
                     drag_motion.reset()
                     scroll_was_claiming = False
                     fist_was_claiming = False
-                    zoom_was_claiming = False
                     cursor_update = cursor_pipeline.update(
                         calibration_point, now_seconds, freeze=True
                     )
@@ -350,7 +328,6 @@ def run(
                     drag_motion.reset()
                     scroll_was_claiming = False
                     fist_was_claiming = False
-                    zoom_was_claiming = False
                 fps = fps_meter.update(now_seconds)
                 cv2.imshow(
                     config.window_title,
@@ -375,22 +352,33 @@ def run(
                         dry_run_drag_starts,
                         dry_run_drag_ends,
                         fist_update,
-                        zoom_update,
-                        dry_run_zoom_in_steps,
-                        dry_run_zoom_out_steps,
                         config.dominant_hand,
                         hand_accepted,
                         calibrator.status,
                         profile_path is not None,
                         safety.status,
                         hotkeys.available,
-                        pause_update,
                         pointer_pose_update,
                     ),
                 )
+                if runtime_bridge is not None:
+                    control_status = safety.status
+                    runtime_bridge.publish(
+                        RuntimeSnapshot(
+                            running=True,
+                            control_state=control_status.state.value,
+                            reason=control_status.reason,
+                            controller_name=control_status.controller_name,
+                            real_output=control_status.real_output,
+                            hand_detected=result.hand_detected,
+                            tracking_ready=tracking_ready,
+                            confidence=result.confidence,
+                            fps=fps,
+                        )
+                    )
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("e"), ord("E")):
-                    safety.toggle(tracking_ready)
+                    safety.toggle()
                     if not safety.enabled:
                         if gestures.reset(now_seconds) is GestureAction.DRAG_ENDED:
                             dry_run_drag_ends += 1
@@ -418,7 +406,6 @@ def run(
                     calibrator.start()
                     scroll_was_claiming = False
                     fist_was_claiming = False
-                    zoom_was_claiming = False
                     continue
                 if key in (ord("x"), ord("X")) and calibrator.collecting:
                     calibrator.cancel()
@@ -455,3 +442,14 @@ def run(
         gestures.reset(perf_counter_ns() / 1_000_000_000)
         safety.shutdown()
         cv2.destroyAllWindows()
+        if runtime_bridge is not None:
+            status = safety.status
+            runtime_bridge.publish(
+                RuntimeSnapshot(
+                    running=False,
+                    control_state="stopped",
+                    reason=status.reason,
+                    controller_name=status.controller_name,
+                    real_output=status.real_output,
+                )
+            )

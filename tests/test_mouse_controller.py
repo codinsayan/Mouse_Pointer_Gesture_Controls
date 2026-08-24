@@ -59,8 +59,6 @@ def test_pyautogui_adapter_maps_all_outputs_with_injected_backend() -> None:
     controller.click_right()
     controller.scroll_vertical(2)
     controller.scroll_horizontal(-3)
-    controller.zoom(2)
-    controller.zoom(-1)
     controller.begin_drag()
     controller.begin_drag()
     controller.end_drag()
@@ -73,8 +71,6 @@ def test_pyautogui_adapter_maps_all_outputs_with_injected_backend() -> None:
     assert ("move", (1919, 0, 0)) in backend.calls
     assert ("scroll", 2) in backend.calls
     assert ("hscroll", -3) in backend.calls
-    assert ("press", ("+", 2, 0)) in backend.calls
-    assert ("press", ("-", 1, 0)) in backend.calls
 
 
 def test_release_all_is_idempotent_and_releases_only_owned_inputs() -> None:

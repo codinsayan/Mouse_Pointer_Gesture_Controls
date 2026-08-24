@@ -43,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
             "disabled and requires an explicit enable shortcut"
         ),
     )
+    parser.add_argument(
+        "--settings-ui",
+        action="store_true",
+        help="open the native settings and control dashboard",
+    )
     return parser
 
 
@@ -63,6 +68,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = build_parser().parse_args(argv)
     try:
+        if args.settings_ui:
+            if args.enable_real_input:
+                raise GestureControlsError(
+                    "Select real input explicitly inside the settings dashboard."
+                )
+            from gesture_controls.ui.dashboard import run_dashboard
+
+            run_dashboard(args.config or Path("settings.json"))
+            return 0
         if args.write_default_config is not None:
             save_config(args.write_default_config, AppConfig())
             logging.info("Default settings written to %s", args.write_default_config)

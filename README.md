@@ -1,9 +1,11 @@
 # Gesture Controls
 
 Gesture Controls is a Windows-first, local webcam hand-landmark prototype. The
-current code includes **Iterations 1 through 8**: it displays a mirrored camera
-preview, tracks one hand, recognizes configured gestures, and provides a
-startup-disabled safety gate around optional local OS input.
+current code includes **Iterations 1 through 10**: it displays a mirrored camera
+preview, tracks one hand, recognizes configured gestures, provides a
+startup-disabled safety gate around optional local OS input, and includes a
+native settings dashboard, system-tray controls, and repeatable automated/
+real-world verification tooling.
 
 Camera frames remain in memory only. The application contains no recording,
 frame-writing, upload, telemetry, or remote-inference code and runs visibly in
@@ -50,7 +52,32 @@ is on the [MediaPipe Hand Landmarker documentation](https://ai.google.dev/edge/m
 
 ## Run
 
-From the repository root:
+The recommended Iteration 9 launch opens the settings dashboard and uses
+`settings.json` in the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.main --settings-ui --config settings.json
+```
+
+The dashboard controls pointer speed (`1..10`), scroll speed (`1..20` wheel
+clicks per recognized step), sensitivity (`0.1..3.0`), and dominant hand. Save
+before starting the camera; settings are applied when the camera runtime starts.
+The control center reports safety state, hand detection, confidence, and FPS.
+Closing the window hides it only after the tray is ready. The tray can reopen
+the dashboard, request an emergency pause, or quit safely. Camera frames never
+enter the dashboard or tray process.
+
+The dashboard is responsive: movement and control cards sit side-by-side when
+wide and stack vertically in a narrow window. Vertical and horizontal scrollbars
+remain available for overflow; use the mouse wheel vertically and Shift+wheel
+horizontally.
+
+`Allow real OS input for this run` is deliberately unchecked on every dashboard
+launch and requires a confirmation. Even after confirmation, the runtime starts
+disabled and requires `E`, `Ctrl+Alt+G`, or the dashboard toggle button while a
+valid hand is tracked.
+
+The original foreground-only CLI remains available:
 
 ```powershell
 .\.venv\Scripts\python.exe -m gesture_controls.main
@@ -91,7 +118,13 @@ off-axis movement is ignored, preventing diagonal mixed output.
 Scrolling suppresses click recognition and freezes the cursor until release. Provisional defaults are
 extension activation/release `0.18/0.10`, folded activation/release `0.10/0.18`,
 activation/release holds `0.06/0.05 s`, one step per `0.08` hand-size units, and
-at most three steps per frame. These values require webcam calibration.
+at most three logical steps per frame. Iteration 8 locks the direction of the
+first nonzero stroke while the pose remains held: returning the hand becomes a
+clutch/reposition movement and no longer scrolls the page backward. Release and
+reform the two-finger pose to intentionally reverse direction. Each logical step
+defaults to three OS wheel clicks (`scroll_output_multiplier`), so the maximum
+default output is nine wheel clicks per processed frame. These values still
+require representative webcam/application testing.
 
 Iteration 6 maps a closed fist held for an additional `0.25 s` to a dry-run drag.
 All four non-thumb fingers must be folded; the thumb position is ignored. The
@@ -103,15 +136,6 @@ scroll, fist drag, thumb+little right click, thumb+middle double click, then
 thumb+index left click. All thresholds are provisional; no real mouse-down or
 mouse-up is sent unless the Iteration 8 real-input procedure below is used.
 
-For dry-run zoom, keep index, middle, and little open, bring thumb and ring within
-the activation span, and hold briefly; the ring is free to bend naturally.
-Spread thumb and ring to produce zoom-in steps; contract them to produce zoom-out
-steps. Moving beyond the release span exits zoom. Provisional defaults are span
-activation/release `0.45/0.85`, 60/50 ms pose entry/release, one step per `0.08`
-normalized span change, and at most three steps per frame. Zoom suppresses clicks
-and cursor movement while claimed. In enabled real-input mode, zoom steps become
-local `Ctrl`+`+` or `Ctrl`+`-` operations.
-
 ## Safety controls and optional real input
 
 The normal command remains dry-run. Press `E` in the preview or global
@@ -121,7 +145,7 @@ The normal command remains dry-run. Press `E` in the preview or global
 .\.venv\Scripts\python.exe -m gesture_controls.main --config settings.json
 ```
 
-Real mouse and zoom output requires the non-persistent flag below. The application
+Real mouse output requires the non-persistent flag below. The application
 still starts **disabled**; show an accepted, sufficiently confident hand, then
 press `E` in the preview or global `Ctrl+Alt+G`:
 
@@ -135,16 +159,18 @@ Safety controls:
 - `Ctrl+Alt+G`: global toggle, even when another window has focus.
 - `P`: foreground emergency pause.
 - `Ctrl+Alt+Shift+G`: global emergency pause.
-- Hold all four non-thumb fingers open for about 350 ms: open-palm pause.
+- Open palm has no pause action. Use an emergency key, dashboard, or tray action.
 - Move PyAutoGUI's cursor to a screen corner: PyAutoGUI failsafe; the application
   catches the output failure, pauses, and attempts to release app-owned input.
 
 Tracking loss, wrong dominant hand, missing/below-threshold confidence,
 calibration, output failure, exception, camera failure, window close, and
-shutdown release an app-held drag and block further events. Tracking recovery
-does not resume automatically; explicitly enable again. The default runtime
-threshold is `minimum_runtime_hand_confidence: 0.5`. MediaPipe Tasks exposes the
-handedness category score here, not a distinct per-frame tracking score.
+shutdown release an app-held drag and block unsafe events. During an enabled
+session, temporary hand loss keeps control Enabled but waiting; accepted tracking
+resumes automatically when the hand returns. Manual disable and emergency pause
+do not auto-resume. The default runtime threshold is
+`minimum_runtime_hand_confidence: 0.5`. MediaPipe Tasks exposes the handedness
+category score here, not a distinct per-frame tracking score.
 
 Ordinary pointer movement requires the index finger to be raised. Its
 `0.18/0.10` activation/release hysteresis has no time hold, preserving pointer
@@ -197,9 +223,19 @@ the current session.
 Ordinary tests do not access a webcam:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider
-.\.venv\Scripts\python.exe -m compileall -q src tests
-.\.venv\Scripts\python.exe -m pip check
+.\scripts\run_verification.ps1
+```
+
+That script runs pytest, Python compilation, and dependency compatibility checks.
+For webcam and controlled real-input validation, follow
+[`docs/REAL_WORLD_TESTING.md`](docs/REAL_WORLD_TESTING.md). Every hardware case
+starts as `Not run`; update results only after direct observation.
+
+Check camera and tracker initialization with one volatile frame, no preview, and
+no OS input:
+
+```powershell
+.\.venv\Scripts\python.exe -m gesture_controls.diagnostics.camera_smoke --config settings.json
 ```
 
 There is no build command yet. PyInstaller packaging belongs to Iteration 12.
@@ -213,13 +249,20 @@ There is no build command yet. PyInstaller packaging belongs to Iteration 12.
 - **Camera stops:** reconnect it and restart the foreground application.
 - **Tracker initialization fails:** confirm Python 3.12, reinstall the pinned
   requirements, and replace a possibly incomplete model download.
-- **Control will not enable:** keep the configured dominant hand visible and
-  check the overlay's confidence and safety reason.
+- **Enabled but gestures are waiting:** check the dashboard hand status, overlay
+  confidence, and configured dominant hand. Output remains blocked until an
+  accepted hand is visible, then resumes automatically.
 - **Global hotkey registration fails:** close the application already using
   `Ctrl+Alt+G`, then restart Gesture Controls. Real input is not started without
   both safety hotkeys.
-- **Tracking recovered but control remains paused:** this is intentional; press
-  `E` or `Ctrl+Alt+G` to re-enable explicitly.
+- **Tracking recovered after temporary loss:** no action is required while the
+  control state remains Enabled. If you manually disabled or emergency-paused,
+  press `E`, `Ctrl+Alt+G`, or the dashboard Enable button explicitly.
+- **Tray is unavailable:** keep the dashboard visible. Tray startup failures are
+  shown in the status card and do not affect camera cleanup or safety controls.
+- **Saved settings do not affect an already running camera:** stop and restart
+  the camera from the dashboard; runtime settings are intentionally immutable
+  during a run.
 
 Project status and actual verification results are maintained in
 [`docs/IMPLEMENTATION_DETAILS.md`](docs/IMPLEMENTATION_DETAILS.md).

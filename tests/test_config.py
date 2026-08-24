@@ -69,22 +69,23 @@ def test_rejects_invalid_minimum_movement() -> None:
         AppConfig(cursor_minimum_movement=-0.1)
 
 
-def test_rejects_invalid_pause_settings() -> None:
-    with pytest.raises(ValueError, match="pause extension"):
-        AppConfig(
-            pause_extension_activation_ratio=0.10,
-            pause_extension_release_ratio=0.10,
-        )
-    with pytest.raises(ValueError, match="pause_activation_hold_seconds"):
-        AppConfig(pause_activation_hold_seconds=-0.1)
-
-
 def test_rejects_invalid_pointer_pose_settings() -> None:
     with pytest.raises(ValueError, match="pointer extension"):
         AppConfig(
             pointer_extension_activation_ratio=0.10,
             pointer_extension_release_ratio=0.10,
         )
+
+
+@pytest.mark.parametrize("value", [0, 21, True])
+def test_rejects_invalid_scroll_output_multiplier(value: int) -> None:
+    with pytest.raises(ValueError, match="scroll_output_multiplier"):
+        AppConfig(scroll_output_multiplier=value)
+
+
+def test_rejects_non_boolean_scroll_direction_lock() -> None:
+    with pytest.raises(ValueError, match="scroll_direction_lock_enabled"):
+        AppConfig(scroll_direction_lock_enabled=1)  # type: ignore[arg-type]
 
 
 def test_rejects_invalid_left_pinch_hysteresis() -> None:
@@ -105,8 +106,6 @@ def test_rejects_invalid_left_pinch_hysteresis() -> None:
         "fist_activation_hold_seconds",
         "fist_release_hold_seconds",
         "drag_activation_hold_seconds",
-        "zoom_activation_hold_seconds",
-        "zoom_release_hold_seconds",
         "scroll_activation_hold_seconds",
         "scroll_release_hold_seconds",
         "post_click_cursor_resume_delay_seconds",
@@ -138,26 +137,6 @@ def test_rejects_invalid_fist_hysteresis() -> None:
 def test_rejects_invalid_drag_cursor_minimum_movement() -> None:
     with pytest.raises(ValueError, match="drag_cursor_minimum_movement"):
         AppConfig(drag_cursor_minimum_movement=-0.1)
-
-
-def test_rejects_invalid_zoom_span_hysteresis() -> None:
-    with pytest.raises(ValueError, match="zoom span ratios"):
-        AppConfig(zoom_span_activation_ratio=0.9, zoom_span_release_ratio=0.8)
-
-
-def test_rejects_invalid_zoom_pose_hysteresis() -> None:
-    with pytest.raises(ValueError, match="zoom other-finger extension ratios"):
-        AppConfig(
-            zoom_other_fingers_extension_activation_ratio=0.08,
-            zoom_other_fingers_extension_release_ratio=0.12,
-        )
-
-
-def test_rejects_invalid_zoom_step_distance_and_bound() -> None:
-    with pytest.raises(ValueError, match="zoom_step_distance_ratio"):
-        AppConfig(zoom_step_distance_ratio=0.0)
-    with pytest.raises(ValueError, match="zoom_max_steps_per_frame"):
-        AppConfig(zoom_max_steps_per_frame=0)
 
 
 def test_rejects_invalid_scroll_extension_hysteresis() -> None:

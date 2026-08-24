@@ -18,7 +18,6 @@ def features(
         left_pinch_ratio=0.8,
         double_click_pinch_ratio=0.8,
         right_pinch_ratio=0.8,
-        zoom_span_ratio=0.8,
         hand_size=1.0,
         index_extension_ratio=index,
         middle_extension_ratio=middle,

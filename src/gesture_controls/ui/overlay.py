@@ -16,11 +16,8 @@ from gesture_controls.gestures import (
     DragUpdate,
     FistUpdate,
     PinchState,
-    PauseUpdate,
     PointerPoseUpdate,
     ScrollUpdate,
-    ZoomState,
-    ZoomUpdate,
 )
 from gesture_controls.tracking import TrackingResult
 
@@ -61,16 +58,12 @@ def draw_overlay(
     dry_run_drag_starts: int = 0,
     dry_run_drag_ends: int = 0,
     fist_update: FistUpdate | None = None,
-    zoom_update: ZoomUpdate | None = None,
-    dry_run_zoom_in_steps: int = 0,
-    dry_run_zoom_out_steps: int = 0,
     dominant_hand: str = "any",
     hand_accepted: bool = True,
     calibration_status: CalibrationStatus | None = None,
     calibration_persistence_enabled: bool = False,
     control_status: ControlStatus | None = None,
     global_hotkeys_available: bool = False,
-    pause_update: PauseUpdate | None = None,
     pointer_pose_update: PointerPoseUpdate | None = None,
 ) -> Any:
     import cv2
@@ -109,16 +102,9 @@ def draw_overlay(
             and click_update.right.state is PinchState.ACTIVE
             else (180, 180, 180)
         )
-        zoom_color = (
-            (180, 80, 255)
-            if zoom_update is not None
-            and zoom_update.state is ZoomState.ACTIVE
-            else (180, 180, 180)
-        )
         cv2.line(frame, pixels[4], pixels[8], left_color, 3, cv2.LINE_AA)
         cv2.line(frame, pixels[4], pixels[12], double_color, 3, cv2.LINE_AA)
         cv2.line(frame, pixels[4], pixels[20], right_color, 3, cv2.LINE_AA)
-        cv2.line(frame, pixels[4], pixels[16], zoom_color, 3, cv2.LINE_AA)
 
     hand = (
         "Detected"
@@ -174,22 +160,10 @@ def draw_overlay(
             else f"{fist_update.state.value} "
             f"(max extension {fist_update.maximum_extension_ratio:.3f})"
         ),
-        "Open-palm pause: " + (
-            "N/A"
-            if pause_update is None
-            else f"{pause_update.state.value} "
-            f"(min extension {pause_update.minimum_extension_ratio:.3f})"
-        ),
         "Drag: " + (
             "N/A" if drag_update is None else drag_update.state.value
         ),
         f"Gesture drags: start {dry_run_drag_starts} / end {dry_run_drag_ends}",
-        "Zoom: " + (
-            "N/A" if zoom_update is None
-            else f"{zoom_update.state.value} ({zoom_update.span_ratio:.3f})"
-        ),
-        "Gesture zoom steps: "
-        f"in {dry_run_zoom_in_steps} / out {dry_run_zoom_out_steps}",
         f"Gesture left clicks: {dry_run_left_clicks}",
         f"Gesture double clicks: {dry_run_double_clicks}",
         f"Gesture right clicks: {dry_run_right_clicks}",

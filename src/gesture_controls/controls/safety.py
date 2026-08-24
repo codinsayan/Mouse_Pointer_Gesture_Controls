@@ -13,8 +13,6 @@ from .mouse import MouseController
 class ControlState(str, Enum):
     DISABLED = "disabled"
     ENABLED = "enabled"
-    TRACKING_LOST = "tracking_lost"
-    EMERGENCY_PAUSED = "emergency_paused"
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,11 +29,16 @@ class InputSafetyController:
     def __init__(self, controller: MouseController) -> None:
         self._controller = controller
         self._state = ControlState.DISABLED
+        self._tracking_available = False
         self._reason = "Startup safety: explicitly enable control"
 
     @property
     def enabled(self) -> bool:
         return self._state is ControlState.ENABLED
+
+    @property
+    def tracking_available(self) -> bool:
+        return self._tracking_available
 
     @property
     def status(self) -> ControlStatus:
@@ -46,34 +49,41 @@ class InputSafetyController:
             self._controller.real_output,
         )
 
-    def toggle(self, tracking_ready: bool) -> bool:
+    def toggle(self) -> bool:
         if self.enabled:
-            self.pause("Paused by user")
-            return False
-        if not tracking_ready:
-            reason = "Cannot enable: accepted hand unavailable"
-            reason = self._release_safely(reason)
-            self._state = ControlState.TRACKING_LOST
-            self._reason = reason
+            self.pause("Control explicitly disabled")
             return False
         self._state = ControlState.ENABLED
-        self._reason = "Control explicitly enabled"
+        self._reason = (
+            "Control enabled: hand tracking active"
+            if self._tracking_available
+            else "Control enabled: waiting for accepted hand"
+        )
         return True
+
+    def set_tracking_available(
+        self, available: bool, reason: str = "Control enabled: waiting for accepted hand"
+    ) -> None:
+        """Gate output without changing the user's enabled/disabled choice."""
+        was_available = self._tracking_available
+        self._tracking_available = available
+        if not self.enabled:
+            return
+        if available:
+            self._reason = "Control enabled: hand tracking active"
+        elif was_available:
+            self._reason = self._release_safely(reason)
+        else:
+            self._reason = reason
 
     def pause(self, reason: str = "Paused by user") -> None:
         reason = self._release_safely(reason)
         self._state = ControlState.DISABLED
         self._reason = reason
 
-    def tracking_lost(self, reason: str = "Tracking lost") -> None:
-        if self.enabled or self._state is ControlState.TRACKING_LOST:
-            reason = self._release_safely(reason)
-            self._state = ControlState.TRACKING_LOST
-            self._reason = reason
-
     def emergency_pause(self, reason: str = "Emergency pause requested") -> None:
         reason = self._release_safely(reason)
-        self._state = ControlState.EMERGENCY_PAUSED
+        self._state = ControlState.DISABLED
         self._reason = reason
 
     def shutdown(self) -> None:
@@ -111,11 +121,6 @@ class InputSafetyController:
             "Horizontal scroll output failed",
         )
 
-    def zoom(self, steps: int) -> bool:
-        if not steps:
-            return False
-        return self._emit(lambda: self._controller.zoom(steps), "Zoom output failed")
-
     def begin_drag(self) -> bool:
         return self._emit(self._controller.begin_drag, "Drag start output failed")
 
@@ -123,7 +128,7 @@ class InputSafetyController:
         return self._emit(self._controller.end_drag, "Drag release output failed")
 
     def _emit(self, operation: Callable[[], None], failure_reason: str) -> bool:
-        if not self.enabled:
+        if not self.enabled or not self._tracking_available:
             return False
         try:
             operation()

@@ -15,6 +15,22 @@ from .settings import AppConfig
 
 PROFILE_SCHEMA_VERSION = 1
 PROFILE_ROOT_KEYS = frozenset({"schema_version", "settings"})
+DEPRECATED_SETTING_KEYS = frozenset(
+    {
+        "pause_extension_activation_ratio",
+        "pause_extension_release_ratio",
+        "pause_activation_hold_seconds",
+        "pause_release_hold_seconds",
+        "zoom_span_activation_ratio",
+        "zoom_span_release_ratio",
+        "zoom_other_fingers_extension_activation_ratio",
+        "zoom_other_fingers_extension_release_ratio",
+        "zoom_activation_hold_seconds",
+        "zoom_release_hold_seconds",
+        "zoom_step_distance_ratio",
+        "zoom_max_steps_per_frame",
+    }
+)
 
 
 def _field_defaults() -> dict[str, Any]:
@@ -69,13 +85,14 @@ def profile_to_config(document: Any) -> AppConfig:
     if not isinstance(raw_settings, dict):
         raise ConfigurationError("profile 'settings' must be a JSON object")
     defaults = _field_defaults()
-    unknown_settings = set(raw_settings) - set(defaults)
+    unknown_settings = set(raw_settings) - set(defaults) - DEPRECATED_SETTING_KEYS
     if unknown_settings:
         names = ", ".join(sorted(unknown_settings))
         raise ConfigurationError(f"unknown setting(s): {names}")
     values = {
         name: _coerce_setting(name, value, defaults[name])
         for name, value in raw_settings.items()
+        if name in defaults
     }
     try:
         return AppConfig(**values)

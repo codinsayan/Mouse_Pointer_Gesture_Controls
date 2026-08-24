@@ -88,6 +88,9 @@ of a real held mouse button.
 - Added deterministic tests for controller calls, partial failures, button/key
   ownership, safety transitions, hotkey registration cleanup, open-palm priority,
   pointer gating, settings, and CLI opt-in behavior.
+- Corrected scrolling so the first stroke direction remains locked while the pose
+  is held, return movement clutches/re-anchors without output, releasing permits
+  reversal, and each logical step defaults to three OS wheel clicks.
 - Synchronized the PRD, architecture, README, implementation index, dependencies,
   and this iteration record.
 
@@ -112,6 +115,7 @@ of a real held mouse button.
 - `src/gesture_controls/gestures/interactions.py`
 - `src/gesture_controls/gestures/pause.py`
 - `src/gesture_controls/gestures/pointer.py`
+- `src/gesture_controls/gestures/scroll.py`
 - `src/gesture_controls/ui/overlay.py`
 - `tests/test_config.py`
 - `tests/test_hotkeys.py`
@@ -120,6 +124,7 @@ of a real held mouse button.
 - `tests/test_pause.py`
 - `tests/test_pointer_pose.py`
 - `tests/test_profile.py`
+- `tests/test_scroll.py`
 
 ## Technical Decisions
 
@@ -233,6 +238,28 @@ of a real held mouse button.
 - Regression prevention: Add a deterministic test proving an initially open
   palm cannot pause, then becomes eligible only after a non-open pose is seen.
 
+### Bug 6: Scroll return stroke reverses page movement and travel is too small
+
+- Symptom: A scroll stroke moves the page only a small amount, then returning the
+  hand toward its starting position scrolls the page back toward its origin.
+- Reproduction: Hold either two-finger scroll pose, move along its bound axis,
+  and return along the same axis without releasing the pose.
+- Root cause: The displacement quantizer is intentionally symmetric around a
+  moving anchor, so the return stroke produces equal-and-opposite signed steps.
+  Each logical step is also dispatched as only one PyAutoGUI wheel click.
+- Fix: Locked the first nonzero direction for one held scroll gesture, made
+  opposite movement update the anchor without output, and applied a validated
+  default output multiplier of three after scale-independent quantization.
+  Releasing/reforming the pose resets the lock and permits either direction.
+- Files changed: `gestures/scroll.py`, configuration, application, scroll/config
+  tests, README, architecture, implementation index, and this document.
+- Verification: Pre-fix full suite passed 186 tests in 0.24 seconds. Targeted
+  scroll/config/profile tests pass 84 tests in 0.24 seconds. The post-fix full
+  suite passes 197 tests in 0.24 seconds.
+- Regression prevention: Vertical/horizontal tests now prove return motion emits
+  zero, repeated forward strokes continue, releasing permits reversal, the
+  multiplier scales output, and disabling the lock retains legacy behavior.
+
 ## Tests and Verification
 
 - Commands executed:
@@ -251,6 +278,8 @@ of a real held mouse button.
   - Global-hotkey register/unregister smoke command.
   - `rg` privacy-risk API scan.
   - `git diff --check`
+  - Targeted `tests/test_scroll.py`, `tests/test_config.py`, and
+    `tests/test_profile.py` pytest run.
 - Results:
   - Working tree was clean.
   - System Python: 3.13.5; project Python: 3.12.4.
@@ -258,14 +287,18 @@ of a real held mouse button.
   - Baseline: 151 tests passed in 0.19 seconds.
   - Intermediate suites passed 169, 177, 179, 185, and 186 tests as safety
     coverage was added.
-  - Final suite: 186 tests passed in 0.18 seconds.
+  - Initial Iteration 8 final suite: 186 tests passed in 0.18 seconds.
+  - Scroll-fix baseline: 186 tests passed in 0.24 seconds.
+  - Scroll-fix targeted suite: 84 tests passed in 0.24 seconds.
+  - Current full suite: 197 tests passed in 0.24 seconds.
   - Syntax compilation exited 0 with no output.
   - Dependency check: `No broken requirements found.`
   - CLI help exited 0 and lists the non-persistent real-input flag.
   - PyAutoGUI 0.9.54 imported on Python 3.12.4; `hscroll` and primary-screen
     lookup were available. No input method was called.
   - The existing Iteration 7 `settings.json` loaded with new defaults, requiring
-    no destructive profile rewrite.
+    no destructive profile rewrite; scroll direction lock resolved to `True` and
+    output multiplier to `3`.
   - Both Windows global hotkeys registered and unregistered successfully.
   - Privacy scan found no frame-writing or network-call API matches.
   - `git diff --check` exited 0; Windows line-ending notices were non-failures.
@@ -273,7 +306,7 @@ of a real held mouse button.
   - No live gesture-to-OS input was intentionally enabled in this implementation
     session. This avoids uncalibrated mouse actions during automated work.
 - Performance observations:
-  - The final deterministic suite completed in 0.18 seconds. Pointer-pose gating
+  - The final deterministic suite completed in 0.24 seconds. Pointer-pose gating
     has no time hold, but this is not an end-to-end input-latency measurement.
 
 ## Known Limitations
@@ -287,6 +320,9 @@ of a real held mouse button.
 - The available runtime score is handedness confidence rather than a separate
   per-frame tracking-confidence output. False pauses need representative testing.
 - Open-palm, pointer-extension, and confidence thresholds are provisional.
+- Scroll direction remains locked until the pose is released; deliberate
+  reversal requires release/reacquisition. The default three-click output
+  multiplier may need per-application adjustment.
 - Open-palm pause currently arms immediately after enable, so enabling while
   holding an open hand can return control to `DISABLED` after 350 ms. The proposed
   release-to-arm correction is pending approval.
@@ -300,6 +336,8 @@ explicit steps, unsafe conditions latch output off, and all app-owned button/key
 state follows a common best-effort release path. Open palm and global/foreground
 shortcuts pause control; ordinary pointer movement requires an index-raised pose.
 No webcam frames are recorded, stored, uploaded, or sent for remote inference.
+Scroll return strokes now act as a clutch rather than undoing page movement, and
+logical steps use a validated default three-click output multiplier.
 
 ## Next Iteration
 

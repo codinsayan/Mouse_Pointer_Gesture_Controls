@@ -117,3 +117,62 @@ def test_real_input_cli_flag_is_explicit_and_not_a_profile_setting() -> None:
     assert not build_parser().parse_args([]).enable_real_input
     assert build_parser().parse_args(["--enable-real-input"]).enable_real_input
     assert "enable_real_input" not in config_to_profile(AppConfig())["settings"]
+
+
+def test_settings_ui_cli_flag_is_explicit() -> None:
+    assert not build_parser().parse_args([]).settings_ui
+    assert build_parser().parse_args(["--settings-ui"]).settings_ui
+
+
+def test_settings_ui_rejects_cli_real_input_bypass() -> None:
+    assert main(["--settings-ui", "--enable-real-input"]) == 1
+
+
+def test_legacy_open_palm_settings_are_ignored_and_removed_on_save(
+    local_tmp_path: Path,
+) -> None:
+    document = config_to_profile(AppConfig())
+    document["settings"].update(
+        {
+            "pause_extension_activation_ratio": 0.18,
+            "pause_extension_release_ratio": 0.10,
+            "pause_activation_hold_seconds": 0.35,
+            "pause_release_hold_seconds": 0.05,
+        }
+    )
+    legacy_path = local_tmp_path / "legacy.json"
+    legacy_path.write_text(json.dumps(document), encoding="utf-8")
+
+    loaded = load_config(legacy_path)
+    save_config(legacy_path, loaded)
+    saved_settings = json.loads(legacy_path.read_text(encoding="utf-8"))["settings"]
+
+    assert loaded == AppConfig()
+    assert not any(name.startswith("pause_") for name in saved_settings)
+
+
+def test_legacy_zoom_settings_are_ignored_and_removed_on_save(
+    local_tmp_path: Path,
+) -> None:
+    document = config_to_profile(AppConfig())
+    document["settings"].update(
+        {
+            "zoom_span_activation_ratio": 0.45,
+            "zoom_span_release_ratio": 0.85,
+            "zoom_other_fingers_extension_activation_ratio": 0.12,
+            "zoom_other_fingers_extension_release_ratio": 0.08,
+            "zoom_activation_hold_seconds": 0.06,
+            "zoom_release_hold_seconds": 0.05,
+            "zoom_step_distance_ratio": 0.08,
+            "zoom_max_steps_per_frame": 3,
+        }
+    )
+    legacy_path = local_tmp_path / "legacy-zoom.json"
+    legacy_path.write_text(json.dumps(document), encoding="utf-8")
+
+    loaded = load_config(legacy_path)
+    save_config(legacy_path, loaded)
+    saved_settings = json.loads(legacy_path.read_text(encoding="utf-8"))["settings"]
+
+    assert loaded == AppConfig()
+    assert not any(name.startswith("zoom_") for name in saved_settings)

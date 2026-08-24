@@ -31,3 +31,7 @@ class InputControllerError(GestureControlsError):
 
 class HotkeyRegistrationError(GestureControlsError):
     """Raised when mandatory Windows safety hotkeys cannot be registered."""
+
+
+class DashboardInitializationError(GestureControlsError):
+    """Raised when the native settings dashboard cannot initialize."""

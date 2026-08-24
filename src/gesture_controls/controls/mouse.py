@@ -36,7 +36,6 @@ class MouseController(Protocol):
     def click_right(self) -> None: ...
     def scroll_vertical(self, steps: int) -> None: ...
     def scroll_horizontal(self, steps: int) -> None: ...
-    def zoom(self, steps: int) -> None: ...
     def begin_drag(self) -> None: ...
     def end_drag(self) -> None: ...
     def release_all(self) -> None: ...
@@ -56,7 +55,6 @@ class DryRunMouseController:
     def click_right(self) -> None: pass
     def scroll_vertical(self, steps: int) -> None: del steps
     def scroll_horizontal(self, steps: int) -> None: del steps
-    def zoom(self, steps: int) -> None: del steps
     def begin_drag(self) -> None: pass
     def end_drag(self) -> None: pass
     def release_all(self) -> None: pass
@@ -89,8 +87,6 @@ class RecordingMouseController:
     def scroll_horizontal(self, steps: int) -> None:
         self.actions.append(("horizontal_scroll", steps))
 
-    def zoom(self, steps: int) -> None:
-        self.actions.append(("zoom", steps))
 
     def begin_drag(self) -> None:
         if not self.dragging:
@@ -136,7 +132,6 @@ class PyAutoGuiMouseController:
                 "PyAutoGUI could not read the primary screen dimensions."
             ) from exc
         self._dragging = False
-        self._control_held = False
         self._pending_button: str | None = None
 
     def move_to(self, point: Point2D) -> None:
@@ -161,18 +156,6 @@ class PyAutoGuiMouseController:
     def scroll_horizontal(self, steps: int) -> None:
         if steps:
             self._backend.hscroll(steps)
-
-    def zoom(self, steps: int) -> None:
-        if not steps:
-            return
-        key = "+" if steps > 0 else "-"
-        self._backend.keyDown("ctrl")
-        self._control_held = True
-        try:
-            self._backend.press(key, presses=abs(steps), interval=0)
-        finally:
-            self._release_call(self._backend.keyUp, "ctrl")
-            self._control_held = False
 
     def begin_drag(self) -> None:
         if not self._dragging:
@@ -203,13 +186,6 @@ class PyAutoGuiMouseController:
                 errors.append(exc)
             else:
                 self._pending_button = None
-        if self._control_held:
-            try:
-                self._release_call(self._backend.keyUp, "ctrl")
-            except Exception as exc:
-                errors.append(exc)
-            else:
-                self._control_held = False
         if errors:
             raise InputControllerError("Failed to release all held OS inputs.") from errors[0]
 

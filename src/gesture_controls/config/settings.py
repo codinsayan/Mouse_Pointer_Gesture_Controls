@@ -53,18 +53,6 @@ class AppConfig:
     fist_release_hold_seconds: float = 0.05
     drag_activation_hold_seconds: float = 0.25
     drag_cursor_minimum_movement: float = 0.0005
-    pause_extension_activation_ratio: float = 0.18
-    pause_extension_release_ratio: float = 0.10
-    pause_activation_hold_seconds: float = 0.35
-    pause_release_hold_seconds: float = 0.05
-    zoom_span_activation_ratio: float = 0.45
-    zoom_span_release_ratio: float = 0.85
-    zoom_other_fingers_extension_activation_ratio: float = 0.12
-    zoom_other_fingers_extension_release_ratio: float = 0.08
-    zoom_activation_hold_seconds: float = 0.06
-    zoom_release_hold_seconds: float = 0.05
-    zoom_step_distance_ratio: float = 0.08
-    zoom_max_steps_per_frame: int = 3
     scroll_extension_activation_ratio: float = 0.18
     scroll_extension_release_ratio: float = 0.10
     scroll_folded_activation_ratio: float = 0.10
@@ -73,8 +61,10 @@ class AppConfig:
     scroll_release_hold_seconds: float = 0.05
     scroll_step_distance_ratio: float = 0.08
     scroll_max_steps_per_frame: int = 3
+    scroll_direction_lock_enabled: bool = True
+    scroll_output_multiplier: int = 5
     post_click_cursor_resume_delay_seconds: float = 0.0
-    window_title: str = "Gesture Controls - Iteration 8"
+    window_title: str = "Gesture Controls - Camera Preview"
 
     def __post_init__(self) -> None:
         if self.camera_index < 0:
@@ -154,33 +144,6 @@ class AppConfig:
             raise ValueError("drag_cursor_minimum_movement must be between 0.0 and 1.0")
         if not (
             0.0
-            <= self.pause_extension_release_ratio
-            < self.pause_extension_activation_ratio
-        ):
-            raise ValueError(
-                "pause extension ratios must satisfy 0 <= release < activation"
-            )
-        if not 0.0 < self.zoom_span_activation_ratio < self.zoom_span_release_ratio:
-            raise ValueError("zoom span ratios must satisfy 0 < activation < release")
-        if not (
-            0.0
-            <= self.zoom_other_fingers_extension_release_ratio
-            < self.zoom_other_fingers_extension_activation_ratio
-        ):
-            raise ValueError(
-                "zoom other-finger extension ratios must satisfy "
-                "0 <= release < activation"
-            )
-        if self.zoom_step_distance_ratio <= 0.0:
-            raise ValueError("zoom_step_distance_ratio must be greater than zero")
-        if (
-            not isinstance(self.zoom_max_steps_per_frame, int)
-            or isinstance(self.zoom_max_steps_per_frame, bool)
-            or self.zoom_max_steps_per_frame < 1
-        ):
-            raise ValueError("zoom_max_steps_per_frame must be at least one")
-        if not (
-            0.0
             <= self.scroll_extension_release_ratio
             < self.scroll_extension_activation_ratio
         ):
@@ -203,6 +166,14 @@ class AppConfig:
             or self.scroll_max_steps_per_frame < 1
         ):
             raise ValueError("scroll_max_steps_per_frame must be at least one")
+        if not isinstance(self.scroll_direction_lock_enabled, bool):
+            raise ValueError("scroll_direction_lock_enabled must be a boolean")
+        if (
+            not isinstance(self.scroll_output_multiplier, int)
+            or isinstance(self.scroll_output_multiplier, bool)
+            or not 1 <= self.scroll_output_multiplier <= 20
+        ):
+            raise ValueError("scroll_output_multiplier must be within 1..20")
         for name in (
             "left_pinch_activation_hold_seconds",
             "left_pinch_release_hold_seconds",
@@ -216,10 +187,6 @@ class AppConfig:
             "fist_activation_hold_seconds",
             "fist_release_hold_seconds",
             "drag_activation_hold_seconds",
-            "pause_activation_hold_seconds",
-            "pause_release_hold_seconds",
-            "zoom_activation_hold_seconds",
-            "zoom_release_hold_seconds",
             "scroll_activation_hold_seconds",
             "scroll_release_hold_seconds",
             "post_click_cursor_resume_delay_seconds",

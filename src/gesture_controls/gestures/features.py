@@ -29,7 +29,6 @@ class PinchFeatures:
     left_pinch_ratio: float
     double_click_pinch_ratio: float
     right_pinch_ratio: float
-    zoom_span_ratio: float
     hand_size: float
     index_extension_ratio: float
     middle_extension_ratio: float
@@ -89,14 +88,10 @@ def extract_left_pinch_features(landmarks: Sequence[Landmark]) -> PinchFeatures:
     right_click_distance = normalized_distance(
         landmarks[THUMB_TIP], landmarks[LITTLE_FINGER_TIP]
     )
-    zoom_span_distance = normalized_distance(
-        landmarks[THUMB_TIP], landmarks[RING_FINGER_TIP]
-    )
     return PinchFeatures(
         pinch_distance / hand_size,
         double_click_distance / hand_size,
         right_click_distance / hand_size,
-        zoom_span_distance / hand_size,
         hand_size,
         _finger_extension_ratio(
             landmarks, INDEX_FINGER_TIP, INDEX_FINGER_PIP, hand_size

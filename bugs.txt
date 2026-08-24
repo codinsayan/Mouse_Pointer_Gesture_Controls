@@ -1,0 +1,2 @@
+1. scrolling is fucked up 
+2. the pointer doesn't reappear if hand disappears once.

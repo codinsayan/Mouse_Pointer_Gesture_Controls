@@ -24,15 +24,16 @@ is local. Camera frames are neither uploaded nor recorded nor permanently stored
 - Thumb/little-finger pinch: right click and highest-priority click pinch.
 - Index and middle raised plus vertical motion: scroll up/down.
 - Middle and ring raised plus horizontal motion: scroll left/right.
-- Thumb-ring pose with index, middle, and little held open: spreading zooms in
-  and contracting zooms out; the ring remains free to articulate.
-- Open palm or global shortcut: pause.
+- Foreground key, global shortcut, dashboard, or tray: pause. Open palm is not a
+  pause gesture.
 - Track no more than one hand and support configurable dominant hand.
 - Configurable sensitivity and smoothing.
-- Visible enabled, disabled, and tracking-lost states.
+- Visible enabled and disabled control states, with hand availability reported
+  separately.
 - Start disabled and emit no input until explicitly enabled.
-- Pause and release held buttons on low confidence, tracking loss, shutdown, or
-  exception.
+- While enabled, stop output and release held buttons whenever the hand is
+  unavailable, then resume tracking automatically when it returns. Only an
+  explicit disable or emergency pause ends the enabled session.
 
 Recognition uses normalized distances, joint geometry, hysteresis, temporal
 validation, cooldowns, and a gesture state machine. The MVP uses no custom ML.
@@ -132,6 +133,8 @@ bounded dry-run zoom-in/out steps, and prevents zoom from leaking clicks. Priori
 is scrolling, fist drag, zoom, right click, double click, then left click. The
 overlay exposes fist, drag, and zoom state and totals. No operating-system mouse
 or keyboard event is generated.
+This Iteration 6 feature was removed by user request during Iteration 10; the
+current product assigns no action to thumb-ring contraction or expansion.
 
 ## Iteration 7 Acceptance Criteria
 
@@ -157,3 +160,42 @@ and shutdown suppress further output and release an app-held drag button. Hand
 recovery never silently resumes control. Automated tests use fake/injected
 controllers only and never emit operating-system input. Ordinary pointer output
 requires an index-raised hysteresis gate; fist drag retains its relative mapping.
+Scroll return motion acts as a clutch rather than emitting reverse steps, and a
+validated post-recognition multiplier provides useful OS wheel travel.
+
+## Iteration 9 Acceptance Criteria
+
+The application provides a clean native Windows settings dashboard for pointer
+speed, scroll speed, cursor sensitivity, and dominant-hand preference. Changes
+are validated and saved atomically to a local profile without losing calibration
+or gesture settings. Cards reflow for narrow windows and all content remains
+reachable through vertical and horizontal overflow scrolling. The dashboard
+shows live safety, hand, confidence, and FPS
+status and can start/stop the existing camera preview, toggle control, and request
+an emergency pause through a thread-safe bridge. Real input remains an explicit
+per-run choice and every camera start remains disabled. An isolated system-tray
+component can restore the dashboard, pause, or quit safely without receiving
+camera frames or being able to keep the main application alive if its Windows
+backend stalls. Automated UI-model and lifecycle tests emit no OS input.
+Enable remains unavailable until tracking is accepted; a rejected initial enable
+stays Disabled, while genuine tracking loss after enablement remains latched.
+This Iteration 9 behavior was superseded by the user-approved two-state recovery
+model in Iteration 10.
+
+## Iteration 10 Acceptance Criteria
+
+Open-palm pause is absent from recognition, conflict ownership, runtime actions,
+and overlays; holding an open hand cannot disable control. Existing schema-1
+profiles containing its former fields still load, and those deprecated fields are
+dropped on a subsequent save. Foreground/global/dashboard/tray emergency pause,
+startup-disabled gating, tracking-loss release, shutdown release, and the
+PyAutoGUI failsafe remain operational. Automated cross-component scenarios use
+synthetic features and a fake mouse controller to cover action exclusivity,
+scroll/click conflicts, drag release, removed thumb-ring behavior, and open-hand behavior. A
+repeatable Windows verification command and an honest real-world dry-run/
+controlled-input protocol are maintained; unperformed hardware cases remain
+explicitly marked Not run.
+Control has only enabled and disabled user states. Enabling does not require a
+currently visible hand. Missing or rejected tracking suppresses output and
+releases held input without clearing enabled intent; accepted tracking resumes
+automatically. Manual disable and emergency pause remain disabled after recovery.

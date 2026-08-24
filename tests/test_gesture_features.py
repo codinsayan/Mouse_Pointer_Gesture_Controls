@@ -9,7 +9,6 @@ def make_hand(
     pinch_ratio: float = 0.2,
     double_ratio: float = 0.6,
     right_ratio: float = 0.7,
-    zoom_ratio: float = 0.6,
 ) -> tuple[Landmark, ...]:
     points = [Landmark(2.0, 3.0, 0.0) for _ in range(21)]
     points[0] = Landmark(2.0, 3.0, 0.0)
@@ -20,7 +19,6 @@ def make_hand(
     points[8] = Landmark(2.0 + scale * pinch_ratio, 3.0, 0.0)
     points[12] = Landmark(2.0 + scale * double_ratio, 3.0, 0.0)
     points[20] = Landmark(2.0 + scale * right_ratio, 3.0, 0.0)
-    points[16] = Landmark(2.0 + scale * zoom_ratio, 3.0, 0.0)
     return tuple(points)
 
 
@@ -76,13 +74,6 @@ def test_right_click_ratio_uses_thumb_to_little_tip_not_ring_tip() -> None:
     points[16] = Landmark(2.01, 3.0, 0.0)
     features = extract_left_pinch_features(tuple(points))
     assert features.right_pinch_ratio == pytest.approx(0.2)
-
-
-def test_zoom_span_uses_thumb_to_ring_tip_and_is_scale_independent() -> None:
-    small = extract_left_pinch_features(make_hand(scale=0.5, zoom_ratio=0.24))
-    large = extract_left_pinch_features(make_hand(scale=3.0, zoom_ratio=0.24))
-    assert small.zoom_span_ratio == pytest.approx(0.24)
-    assert large.zoom_span_ratio == pytest.approx(0.24)
 
 
 def test_scroll_extension_geometry_is_scale_independent() -> None:

@@ -45,7 +45,7 @@ class ScrollUpdate:
 
 
 class ScrollRecognizer:
-    """Recognize a two-finger pose and quantize vertical palm displacement."""
+    """Recognize two-axis scroll strokes with return-motion clutching."""
 
     def __init__(
         self,
@@ -57,6 +57,8 @@ class ScrollRecognizer:
         release_hold_seconds: float,
         step_distance_ratio: float,
         max_steps_per_frame: int,
+        direction_lock_enabled: bool = True,
+        output_multiplier: int = 1,
     ) -> None:
         if not 0.0 <= extension_release_ratio < extension_activation_ratio:
             raise ValueError("extension release ratio must be below activation")
@@ -72,6 +74,14 @@ class ScrollRecognizer:
             or max_steps_per_frame < 1
         ):
             raise ValueError("max scroll steps per frame must be at least one")
+        if not isinstance(direction_lock_enabled, bool):
+            raise ValueError("scroll direction lock setting must be a boolean")
+        if (
+            not isinstance(output_multiplier, int)
+            or isinstance(output_multiplier, bool)
+            or not 1 <= output_multiplier <= 20
+        ):
+            raise ValueError("scroll output multiplier must be within 1..20")
         self._extension_activation = extension_activation_ratio
         self._extension_release = extension_release_ratio
         self._folded_activation = folded_activation_ratio
@@ -80,11 +90,14 @@ class ScrollRecognizer:
         self._release_hold = release_hold_seconds
         self._step_distance = step_distance_ratio
         self._max_steps = max_steps_per_frame
+        self._direction_lock_enabled = direction_lock_enabled
+        self._output_multiplier = output_multiplier
         self._state = ScrollState.INACTIVE
         self._state_since = 0.0
         self._anchor_x = 0.0
         self._anchor_y = 0.0
         self._axis = ScrollAxis.NONE
+        self._locked_direction = 0
         self._last_timestamp: float | None = None
 
     @property
@@ -146,6 +159,14 @@ class ScrollRecognizer:
         raw_steps = trunc(displacement / self._step_distance)
         if raw_steps == 0:
             return 0, 0
+        direction = 1 if raw_steps > 0 else -1
+        if self._direction_lock_enabled:
+            if self._locked_direction == 0:
+                self._locked_direction = direction
+            elif direction != self._locked_direction:
+                self._anchor_x = features.palm_anchor_x
+                self._anchor_y = features.palm_anchor_y
+                return 0, 0
         steps = self._bounded_steps(raw_steps)
         if steps != raw_steps:
             if self._axis is ScrollAxis.HORIZONTAL:
@@ -157,8 +178,8 @@ class ScrollRecognizer:
         else:
             self._anchor_y -= steps * self._step_distance * features.hand_size
         if self._axis is ScrollAxis.HORIZONTAL:
-            return 0, steps
-        return steps, 0
+            return 0, steps * self._output_multiplier
+        return steps * self._output_multiplier, 0
 
     def update(
         self, features: PinchFeatures, timestamp_seconds: float
@@ -173,6 +194,7 @@ class ScrollRecognizer:
                 self._state = ScrollState.CANDIDATE
                 self._state_since = timestamp_seconds
                 self._axis = entry_axis
+                self._locked_direction = 0
             return ScrollUpdate(self._state, axis=self._axis)
 
         if self._state is ScrollState.CANDIDATE:
@@ -180,13 +202,16 @@ class ScrollRecognizer:
             if entry_axis is ScrollAxis.NONE:
                 self._state = ScrollState.INACTIVE
                 self._axis = ScrollAxis.NONE
+                self._locked_direction = 0
             elif entry_axis is not self._axis:
                 self._axis = entry_axis
                 self._state_since = timestamp_seconds
+                self._locked_direction = 0
             elif self._elapsed(timestamp_seconds) >= self._activation_hold:
                 self._state = ScrollState.ACTIVE
                 self._anchor_x = features.palm_anchor_x
                 self._anchor_y = features.palm_anchor_y
+                self._locked_direction = 0
                 return ScrollUpdate(
                     self._state, ScrollTransition.ACTIVATED, axis=self._axis
                 )
@@ -213,6 +238,7 @@ class ScrollRecognizer:
         if self._elapsed(timestamp_seconds) >= self._release_hold:
             self._state = ScrollState.INACTIVE
             self._axis = ScrollAxis.NONE
+            self._locked_direction = 0
             return ScrollUpdate(self._state, ScrollTransition.RELEASED)
         return ScrollUpdate(self._state, axis=self._axis)
 
@@ -222,4 +248,5 @@ class ScrollRecognizer:
         self._anchor_x = 0.0
         self._anchor_y = 0.0
         self._axis = ScrollAxis.NONE
+        self._locked_direction = 0
         self._last_timestamp = None

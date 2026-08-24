@@ -20,8 +20,6 @@ from .scroll import (
 from .interactions import GestureCoordinator, InteractionUpdate
 from .drag import DragAction, DragRecognizer, DragState, DragUpdate
 from .fist import FistRecognizer, FistState, FistTransition, FistUpdate
-from .zoom import ZoomRecognizer, ZoomState, ZoomTransition, ZoomUpdate
-from .pause import OpenPalmPauseRecognizer, PauseState, PauseTransition, PauseUpdate
 from .pointer import PointerPoseGate, PointerPoseUpdate
 from .interactions import GestureAction
 
@@ -55,14 +53,6 @@ __all__ = [
     "FistState",
     "FistTransition",
     "FistUpdate",
-    "ZoomRecognizer",
-    "ZoomState",
-    "ZoomTransition",
-    "ZoomUpdate",
-    "OpenPalmPauseRecognizer",
-    "PauseState",
-    "PauseTransition",
-    "PauseUpdate",
     "PointerPoseGate",
     "PointerPoseUpdate",
 ]
